@@ -142,6 +142,7 @@
   <button class="pill" id="scaleBtn" type="button">Pentatonic</button>
   <button class="pill" id="keyBtn" type="button">Key C</button>
   <button class="pill" id="percBtn" type="button" aria-pressed="false">Percussion</button>
+  <button class="pill on" id="foesBtn" type="button" aria-pressed="true">Static on</button>
   <button class="pill" id="undoBtn" type="button">Undo</button>
   <button class="pill" id="clearBtn" type="button">Clear</button>
   <button class="pill" id="muteBtn" type="button">Sound on</button>
@@ -191,6 +192,7 @@
       <dt>Hover</dt><dd>Creatures swim toward your pen and wake up. Hold the pen button while hovering to scare them off.</dd>
       <dt>Button</dt><dd>Hold the pen button while drawing for a drum creature. Low is kick, middle is snare, high is hat.</dd>
       <dt>Shape</dt><dd>Tight curls play chords. Closed loops become drones. Long straight lines run low, as bass. Jagged turns break into an arpeggio. Spirals sweep the filter open or shut. Draw small for bells, big for pads. Creatures that touch answer each other, and three huddled close share one chord.</dd>
+      <dt>Static</dt><dd>Little angular shapes drift in and feed on your creatures. Draw through them to cut them down. They grow stronger the longer you play. Turn them off with the Static button.</dd>
       <dt>Key</dt><dd>Pick a scale and key up top. Every creature stays in tune with it, and follows if you change it.</dd>
     </dl>
     <button class="pill" id="begin" type="button">Start drawing</button>
@@ -220,7 +222,7 @@
   const KEY = 'inkling.v2';
   function loadPrefs(){ try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch(e){ return {}; } }
   function savePrefs(){
-    try { localStorage.setItem(KEY, JSON.stringify({scaleIdx, keyIdx, bpm, swing, space, vol})); } catch(e){}
+    try { localStorage.setItem(KEY, JSON.stringify({scaleIdx, keyIdx, bpm, swing, space, vol, foes: foesOn})); } catch(e){}
   }
   const saved = loadPrefs();
   const pick = (v, lo, hi, d) => (typeof v === 'number' && isFinite(v) && v >= lo && v <= hi) ? v : d;
@@ -297,7 +299,16 @@
     {id:'skill:menagerie2',kind:'skill',name:'Zoo',            cost:220,  requires:'skill:menagerie',effect:{maxOrgs:4},  desc:'Keep 4 more creatures alive at once.'},
     {id:'skill:menagerie3',kind:'skill',name:'Ark',            cost:700,  requires:'skill:menagerie2',effect:{maxOrgs:6}, desc:'Keep 6 more creatures alive at once.'},
     {id:'skill:breath2',  kind:'skill', name:'Deeper Breath',  cost:300,  requires:'skill:breath',effect:{droneCap:3},    desc:'Keep 3 more drones breathing at once.'},
-    {id:'skill:voices2',  kind:'skill', name:'Many Voices',    cost:300,  requires:'skill:voices',effect:{voiceCap:20},   desc:'Even more notes can sound at once.'}
+    {id:'skill:voices2',  kind:'skill', name:'Many Voices',    cost:300,  requires:'skill:voices',effect:{voiceCap:20},   desc:'Even more notes can sound at once.'},
+    {id:'skill:hide1',    kind:'skill', name:'Thick Skin',     cost:60,   requires:null,          effect:{hpBonus:2},     desc:'Creatures can take 2 more bites from static.'},
+    {id:'skill:hide2',    kind:'skill', name:'Scales',         cost:200,  requires:'skill:hide1', effect:{hpBonus:3},     desc:'Creatures can take 3 more bites.'},
+    {id:'skill:hide3',    kind:'skill', name:'Carapace',       cost:600,  requires:'skill:hide2', effect:{hpBonus:5},     desc:'Creatures can take 5 more bites.'},
+    {id:'skill:mend1',    kind:'skill', name:'Mending Song',   cost:80,   requires:null,          effect:{regen:0.15},    desc:'Hurt creatures heal faster once static leaves them alone.'},
+    {id:'skill:mend2',    kind:'skill', name:'Healing Chord',  cost:260,  requires:'skill:mend1', effect:{regen:0.4},     desc:'Hurt creatures heal much faster.'},
+    {id:'skill:edge1',    kind:'skill', name:'Sharp Ink',      cost:100,  requires:null,          effect:{cutBonus:1},    desc:'Your strokes cut static for one extra damage.'},
+    {id:'skill:edge2',    kind:'skill', name:'Razor Ink',      cost:450,  requires:'skill:edge1', effect:{cutBonus:1},    desc:'Another point of cutting damage.'},
+    {id:'skill:bounty1',  kind:'skill', name:'Bounty',         cost:120,  requires:null,          effect:{bounty:1},      desc:'Every static you cut down pays one extra point.'},
+    {id:'skill:bounty2',  kind:'skill', name:'Head Money',     cost:500,  requires:'skill:bounty1',effect:{bounty:3},     desc:'Every static you cut down pays three more points.'}
   ];
   // instruments for lead notes, arps and chords
   const VOICES = [
@@ -313,7 +324,7 @@
     const n = k => (typeof s[k] === 'number' && isFinite(s[k]) && s[k] >= 0) ? s[k] : 0;
     const o = k => (s[k] && typeof s[k] === 'object' && !Array.isArray(s[k])) ? s[k] : {};
     return {spawns:n('spawns'), drums:n('drums'), maxAlive:n('maxAlive'), playSec:n('playSec'), records:n('records'),
-            samples:n('samples'), types:o('types'), scales:o('scales'), keys:o('keys'), flags:o('flags')};
+            samples:n('samples'), kills:n('kills'), bestLevel:n('bestLevel'), types:o('types'), scales:o('scales'), keys:o('keys'), flags:o('flags')};
   }
   const fmtMin = v => Math.floor(v / 60) + ' min';
   const GOALS = [
@@ -335,6 +346,14 @@
     {id:'g:rec5',    name:'Recording artist',  desc:'Save 5 takes.',                                target:5,    reward:250,  get:s => s.records},
     {id:'g:samp1',   name:'Bring your own',    desc:'Load a sound of your own.',                    target:1,    reward:50,   get:s => s.samples},
     {id:'g:samp5',   name:'Crate digger',      desc:'Load 5 sounds.',                               target:5,    reward:150,  get:s => s.samples},
+    {id:'g:kill10',  name:'Snip',              desc:'Cut down 10 static.',                          target:10,   reward:30,   get:s => s.kills},
+    {id:'g:kill50',  name:'Weeding',           desc:'Cut down 50 static.',                          target:50,   reward:120,  get:s => s.kills},
+    {id:'g:kill250', name:'Exterminator',      desc:'Cut down 250 static.',                         target:250,  reward:500,  get:s => s.kills},
+    {id:'g:kill1000',name:'Silence',           desc:'Cut down 1000 static.',                        target:1000, reward:2500, get:s => s.kills},
+    {id:'g:lvl3',    name:'Rising tide',       desc:'Survive to static level 3.',                   target:3,    reward:60,   get:s => s.bestLevel},
+    {id:'g:lvl6',    name:'Storm',             desc:'Survive to static level 6.',                   target:6,    reward:250,  get:s => s.bestLevel},
+    {id:'g:lvl10',   name:'Tempest',           desc:'Survive to static level 10.',                  target:10,   reward:700,  get:s => s.bestLevel},
+    {id:'g:lvl15',   name:'Eye of the storm',  desc:'Survive to static level 15.',                  target:15,   reward:2000, get:s => s.bestLevel},
     {id:'g:time10',  name:'Settle in',         desc:'Play for 10 minutes.',                         target:600,  reward:150,  get:s => s.playSec, fmt:fmtMin},
     {id:'g:time60',  name:'Marathon',          desc:'Play for an hour in total.',                   target:3600, reward:900,  get:s => s.playSec, fmt:fmtMin},
     {id:'g:time300', name:'Devoted',           desc:'Play for five hours in total.',                target:18000,reward:4000, get:s => s.playSec, fmt:fmtMin}
@@ -361,9 +380,9 @@
   const curInst = () => (pointsState.inst && isUnlocked('inst:' + pointsState.inst)) ? pointsState.inst : 'default';
   const goalClaimed = g => pointsState.claimed.indexOf(g.id) !== -1;
   const goalsReady = () => GOALS.filter(g => !goalClaimed(g) && g.get(pointsState.stats) >= g.target);
-  let skillStats = {idleRate:0, creatureMult:0, spawnBonus:0, maxOrgs:0, droneCap:0, voiceCap:0};
+  let skillStats = {idleRate:0, creatureMult:0, spawnBonus:0, maxOrgs:0, droneCap:0, voiceCap:0, hpBonus:0, regen:0, cutBonus:0, bounty:0};
   function computeSkillStats(){
-    const s = {idleRate:0, creatureMult:0, spawnBonus:0, maxOrgs:0, droneCap:0, voiceCap:0};
+    const s = {idleRate:0, creatureMult:0, spawnBonus:0, maxOrgs:0, droneCap:0, voiceCap:0, hpBonus:0, regen:0, cutBonus:0, bounty:0};
     SKILLS.forEach(sk => {
       if (sk.effect && isUnlocked(sk.id)) for (const k in sk.effect) s[k] = (s[k] || 0) + sk.effect[k];
     });
@@ -946,6 +965,7 @@
       stroke.dist += d;
     }
     stroke.pts.push({x, y, p, tl, t: performance.now() - stroke.t0});
+    if (last) cutFoes(last.x, last.y, x, y, stroke.perc);
     const midi = noteFromY(y);
     if (stroke.perc){
       if (Math.hypot(x - stroke.tickX, y - stroke.tickY) > 46){
@@ -1127,6 +1147,7 @@
       pts.forEach(p => { pm += p.p; tm += p.tl; });
       o.dr = droneStart(noteFromY(cy) - 12 + octaveShift * 12, pm / N, tm / N, steps * STEP);
     }
+    o.hpMul = closed ? 1.6 : type === 'bass' ? 1.4 : 1; o.hp = orgMax(o); o.hurt = 0; o.hurtT = 0;
     orgs.push(o);
 
     const alive = orgs.filter(x => !x.dying);
@@ -1360,6 +1381,174 @@
     }
   }
 
+  /* ---------- static: little shapes that feed on creatures ---------- */
+  const foes = [];
+  let foesOn = saved.foes !== false;
+  let foeClock = 0, foeSpawnIn = 12, threat = 1, foeSeen = false, hurtSeen = false, sfxLast = 0;
+  const FOE_KINDS = {   // r: radius, hp, speed px/s, dmg per bite, min: threat level it first appears, w: spawn weight
+    drifter: {sides:3, r:9,  hp:1, speed:28, dmg:0.5,  min:1,   w:5,   hue:350},
+    dart:    {sides:4, r:7,  hp:1, speed:75, dmg:0.35, min:2.5, w:3,   hue:30},
+    spore:   {sides:5, r:11, hp:2, speed:24, dmg:0.5,  min:3.5, w:2,   hue:285, split:true},
+    brute:   {sides:6, r:17, hp:4, speed:17, dmg:1.1,  min:5,   w:1.5, hue:325}
+  };
+  const orgMax = o => Math.round((6 + skillStats.hpBonus) * (o.hpMul || 1));
+  function orgFade(o, t){
+    const f = clamp((o.hp === undefined ? 1 : o.hp) / orgMax(o), 0, 1);
+    return (0.5 + 0.5 * f) * (o.hurt > 0 ? 0.65 + 0.35 * Math.sin(t * 40) : 1);
+  }
+  const foeCap = () => Math.min(14, 3 + Math.floor(threat * 1.2));
+
+  function sfx(kind, x, pitch = 1){
+    if (!AC || muted || voices >= VOICE_CAP + skillStats.voiceCap) return;
+    const t = AC.currentTime;
+    if (kind === 'cut'){ if (t - sfxLast < 0.05) return; sfxLast = t; }
+    const sp = {cut:['square', 900, 300, 0.09, 0.05], pop:['triangle', 520, 90, 0.16, 0.12],
+                bite:['sawtooth', 110, 55, 0.18, 0.09], fall:['sine', 300, 45, 0.9, 0.16]}[kind];
+    const o = AC.createOscillator(), g = AC.createGain(), p = panner(clamp((x / W) * 2 - 1, -1, 1));
+    o.type = sp[0];
+    o.frequency.setValueAtTime(sp[1] * pitch, t);
+    o.frequency.exponentialRampToValueAtTime(Math.max(20, sp[2] * pitch), t + sp[3]);
+    g.gain.setValueAtTime(sp[4], t); g.gain.exponentialRampToValueAtTime(0.0005, t + sp[3]);
+    o.connect(g); g.connect(p);
+    const nodes = [g, p, ...bus(p, 0.1, 0.25)];
+    o.start(t); o.stop(t + sp[3] + 0.02); voices++;
+    o.onended = () => { voices--; release(nodes); };
+  }
+
+  function pickKind(){
+    const opts = [];
+    for (const k in FOE_KINDS) if (FOE_KINDS[k].min <= threat) opts.push([k, FOE_KINDS[k].w]);
+    let r = Math.random() * opts.reduce((a, b) => a + b[1], 0);
+    for (const [k, w] of opts){ if ((r -= w) <= 0) return k; }
+    return 'drifter';
+  }
+  function spawnFoe(kind, px, py, small){
+    const k = FOE_KINDS[kind], lv = Math.max(0, threat - 1);
+    let x = px, y = py;
+    if (x === undefined){
+      const edge = Math.floor(Math.random() * 4);
+      x = edge === 0 ? -20 : edge === 1 ? W + 20 : Math.random() * W;
+      y = edge === 2 ? -20 : edge === 3 ? H + 20 : Math.random() * H;
+    }
+    const hp = small ? 1 : k.hp + Math.floor(lv * 0.5);
+    foes.push({kind, x, y, vx: 0, vy: 0, hp, maxHp: hp, sides: k.sides, hue: k.hue, split: !!k.split && !small,
+      r: k.r * (small ? 0.75 : 1) * (1 + Math.min(0.5, lv * 0.03)),
+      dmg: k.dmg * (1 + 0.1 * lv) * (small ? 0.7 : 1),
+      speed: k.speed * Math.min(2, 1 + 0.05 * lv) * (small ? 1.3 : 1),
+      rot: Math.random() * 6.28, spin: (Math.random() - 0.5) * 2, phase: Math.random() * 6.28,
+      target: null, atk: 0.4, flash: 0, cut: 0, alpha: 0});
+    const S = pointsState.stats; S.bestLevel = Math.max(S.bestLevel, Math.floor(threat));
+    if (!foeSeen){ foeSeen = true; showHint('Static drifts in. Draw straight through it to cut it down.', 7000); }
+  }
+  function hurtOrg(o, d, x, y){
+    o.hp -= d; o.hurt = 1; o.hurtT = 0;
+    burst(x, y, 350, 3); ripples.push({x, y, r: 5, life: 1, hue: 350});
+    sfx('bite', x);
+    if (!hurtSeen){ hurtSeen = true; showHint('Static is feeding on a creature. Cut it down before it wears out.', 7000); }
+    if (o.hp <= 0 && !o.dying){
+      o.dying = true; burst(o.cx, o.cy, 350, 14); sfx('fall', o.cx);
+    }
+  }
+  function killFoe(i){
+    const f = foes[i]; foes.splice(i, 1);
+    burst(f.x, f.y, f.hue, 8); ripples.push({x: f.x, y: f.y, r: 8, life: 1, hue: f.hue});
+    sfx('pop', f.x, 12 / f.r);
+    pointsState.stats.kills++;
+    earnPoints(1 + Math.floor(threat * 0.5) + skillStats.bounty);
+    if (f.split) for (let n = 0; n < 2; n++) spawnFoe('dart', f.x + (Math.random() - 0.5) * 16, f.y + (Math.random() - 0.5) * 16, true);
+  }
+  // a pen stroke segment that passes through a shape cuts it
+  function cutFoes(x0, y0, x1, y1, perc){
+    if (!foesOn || !foes.length) return;
+    const dx = x1 - x0, dy = y1 - y0, L2 = dx * dx + dy * dy || 1;
+    for (let i = foes.length - 1; i >= 0; i--){
+      const f = foes[i];
+      if (f.cut > 0 || f.alpha < 0.5) continue;
+      const u = clamp(((f.x - x0) * dx + (f.y - y0) * dy) / L2, 0, 1);
+      const cx = x0 + u * dx, cy = y0 + u * dy, d = Math.hypot(f.x - cx, f.y - cy);
+      if (d > f.r + 5) continue;
+      f.hp -= (perc ? 2 : 1) + skillStats.cutBonus; f.cut = 0.14; f.flash = 1;
+      const n = d || 1; f.vx += (f.x - cx) / n * 90; f.vy += (f.y - cy) / n * 90;
+      burst(f.x, f.y, f.hue, 2);
+      if (f.hp <= 0) killFoe(i); else sfx('cut', f.x);
+    }
+  }
+  function updateFoes(dt, t){
+    // hurt creatures recover once left alone, and the damage flicker fades
+    for (const o of orgs){
+      if (o.hp === undefined) continue;
+      o.hurt = Math.max(0, (o.hurt || 0) - dt * 2.5);
+      o.hurtT = (o.hurtT || 0) + dt;
+      const mx = orgMax(o);
+      if (!o.dying && o.hp < mx && o.hurtT > 3) o.hp = Math.min(mx, o.hp + (0.06 + skillStats.regen) * dt);
+    }
+    if (!foesOn){ if (foes.length) foes.length = 0; return; }
+    const alive = orgs.filter(o => !o.dying);
+    if (AC && alive.length){
+      foeClock += dt;
+      const lv = 1 + foeClock / 50;
+      if (Math.floor(lv) > Math.floor(threat)) showHint('The static grows stronger. Level ' + Math.floor(lv) + '.', 4000);
+      threat = lv;
+      foeSpawnIn -= dt;
+      if (foeSpawnIn <= 0){
+        if (foes.length < foeCap()) spawnFoe(pickKind());
+        foeSpawnIn = Math.max(1.6, 8 / (1 + (threat - 1) * 0.35)) * (0.75 + Math.random() * 0.5);
+      }
+    }
+    for (let i = foes.length - 1; i >= 0; i--){
+      const f = foes[i];
+      f.rot += f.spin * dt; f.flash = Math.max(0, f.flash - dt * 4);
+      f.cut = Math.max(0, f.cut - dt); f.atk = Math.max(0, f.atk - dt);
+      if (!alive.length){                       // nothing left to feed on: fade away
+        f.alpha -= dt;
+        if (f.alpha <= 0) foes.splice(i, 1);
+        continue;
+      }
+      f.alpha = Math.min(1, f.alpha + dt * 2);
+      if (!f.target || f.target.dying){
+        let bd = 1e12;
+        for (const o of alive){ const d = (o.cx - f.x) ** 2 + (o.cy - f.y) ** 2; if (d < bd){ bd = d; f.target = o; } }
+      }
+      const o = f.target;
+      let px = o.cx, py = o.cy, bd = 1e12;
+      for (let j = 0; j < o.N; j += 2){
+        const d = (o.wx[j] - f.x) ** 2 + (o.wy[j] - f.y) ** 2;
+        if (d < bd){ bd = d; px = o.wx[j]; py = o.wy[j]; }
+      }
+      const dx = px - f.x, dy = py - f.y, d = Math.hypot(dx, dy) || 1;
+      const sp = f.speed * (f.kind === 'dart' ? 0.6 + 0.9 * Math.max(0, Math.sin(t * 3 + f.phase)) : 1);
+      const wob = Math.sin(t * 2 + f.phase) * sp * 0.35;
+      const k = Math.min(1, dt * 2.5);
+      f.vx += (dx / d * sp - dy / d * wob - f.vx) * k;
+      f.vy += (dy / d * sp + dx / d * wob - f.vy) * k;
+      f.x += f.vx * dt; f.y += f.vy * dt;
+      if (d < f.r + 7){
+        f.vx *= 0.6; f.vy *= 0.6;
+        if (f.atk <= 0){ f.atk = 0.9; hurtOrg(o, f.dmg, px, py); }
+      }
+    }
+  }
+  function drawFoes(t){
+    ctx.lineJoin = 'round';
+    for (const f of foes){
+      const A = clamp(f.alpha, 0, 1), h = f.hue, n = f.sides, R = f.r * (1 + 0.08 * Math.sin(t * 6 + f.phase));
+      const poly = rad => {
+        ctx.beginPath();
+        for (let i = 0; i < n; i++){
+          const a = f.rot + i * 6.2832 / n, x = f.x + Math.cos(a) * rad, y = f.y + Math.sin(a) * rad;
+          if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        }
+        ctx.closePath();
+      };
+      ctx.fillStyle = `hsla(${h},90%,60%,${0.09 * A})`; poly(R * 2); ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = f.flash > 0 ? `hsla(${h},100%,92%,${A})` : `hsla(${h},90%,62%,${0.9 * A})`;
+      poly(R); ctx.stroke();
+      ctx.fillStyle = `hsla(${h},90%,62%,${(0.25 + 0.3 * f.flash) * A})`;
+      poly(R * (0.25 + 0.75 * clamp(f.hp / f.maxHp, 0, 1))); ctx.fill();
+    }
+  }
+
   /* ---------- rendering ---------- */
   function drawGrid(curY){
     const s = SCALES[scaleNames[scaleIdx]];
@@ -1384,7 +1573,7 @@
   }
 
   function drawOrg(o, t, gp){
-    const N = o.N, A = o.alpha;
+    const N = o.N, A = o.alpha * orgFade(o, t);
     const ph = (((gp % o.steps) + o.steps) % o.steps) / o.steps;
     const head = ph * (N - 1);
     const segs = o.drone ? N : N - 1;
@@ -1551,7 +1740,9 @@
     drawGrid(curY);
     ctx.globalCompositeOperation = 'lighter';
     updateOrgs(dt, t);
+    updateFoes(dt, t);
     for (const o of orgs) drawOrg(o, t, gp);
+    drawFoes(t);
     drawStroke();
     drawRipples(dt);
     drawLinks(dt);
@@ -1676,194 +1867,4 @@
       const owned = isUnlocked(u.id);
       const locked = !owned && u.requires && !isUnlocked(u.requires);
       const item = document.createElement('div'); item.className = 'item';
-      const h3 = document.createElement('h3'); h3.textContent = u.name;
-      const p = document.createElement('p'); p.textContent = u.desc;
-      item.appendChild(h3); item.appendChild(p);
-      if (locked){
-        const reqName = (SKILLS.find(x => x.id === u.requires) || {}).name || 'a prior skill';
-        const req = document.createElement('p'); req.className = 'reqline'; req.textContent = 'Requires: ' + reqName;
-        item.appendChild(req);
-      }
-      const row = document.createElement('div'); row.className = 'row2';
-      const cost = document.createElement('span'); cost.className = 'cost';
-      cost.textContent = owned ? (u.kind === 'skill' ? 'Learned' : 'Unlocked') : (u.cost + ' pts');
-      row.appendChild(cost);
-      if (!owned){
-        const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'buy';
-        btn.textContent = locked ? 'Locked' : 'Unlock';
-        btn.disabled = locked || pointsState.points < u.cost;
-        if (!locked) btn.addEventListener('click', () => buyEntry(u));
-        row.appendChild(btn);
-      } else if (u.kind === 'theme' || u.kind === 'skin' || u.kind === 'inst'){
-        const val = u.id.split(':')[1];
-        const active = pointsState[u.kind] === val;
-        const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'use' + (active ? ' active' : '');
-        btn.textContent = active ? 'In use' : 'Use';
-        btn.addEventListener('click', () => setActive(u.kind, val));
-        row.appendChild(btn);
-      }
-      item.appendChild(row);
-      shopList.appendChild(item);
-    });
-  }
-
-  function syncSlider(name, value){
-    const s = sliders[name];
-    s.el.value = value; s.out.textContent = s.fmt(value);
-  }
-  syncSlider('bpm', bpm);
-  syncSlider('swing', Math.round(swing * 100));
-  syncSlider('space', Math.round(space * 100));
-  syncSlider('vol', Math.round(vol * 100));
-  sliders.bpm.el.addEventListener('input', () => {
-    const v = +sliders.bpm.el.value; sliders.bpm.out.textContent = sliders.bpm.fmt(v);
-    setBpm(v); savePrefs();
-    if (v <= 45) pointsState.stats.flags.slow = 1;
-    if (v >= 130) pointsState.stats.flags.fast = 1;
-  });
-  sliders.swing.el.addEventListener('input', () => {
-    const v = +sliders.swing.el.value; sliders.swing.out.textContent = sliders.swing.fmt(v);
-    swing = v / 100; savePrefs();
-    if (v >= 60) pointsState.stats.flags.swing = 1;
-  });
-  sliders.space.el.addEventListener('input', () => {
-    const v = +sliders.space.el.value; sliders.space.out.textContent = sliders.space.fmt(v);
-    space = v / 100; applySpace(); savePrefs();
-    if (v >= 90) pointsState.stats.flags.drench = 1;
-  });
-  sliders.vol.el.addEventListener('input', () => {
-    const v = +sliders.vol.el.value; sliders.vol.out.textContent = sliders.vol.fmt(v);
-    vol = v / 100; applyVolume(); savePrefs();
-  });
-
-  scaleBtn.textContent = scaleNames[scaleIdx];
-  keyBtn.textContent = 'Key ' + KEYS[keyIdx][0];
-  updatePointsUI();
-  scaleBtn.addEventListener('click', () => {
-    scaleIdx = (scaleIdx + 1) % scaleNames.length;
-    scaleBtn.textContent = scaleNames[scaleIdx]; savePrefs();
-    pointsState.stats.scales[scaleNames[scaleIdx]] = 1;
-  });
-  keyBtn.addEventListener('click', () => {
-    keyIdx = (keyIdx + 1) % KEYS.length; applyKey();
-    keyBtn.textContent = 'Key ' + KEYS[keyIdx][0]; savePrefs();
-    pointsState.stats.keys[KEYS[keyIdx][0]] = 1;
-  });
-  percBtn.addEventListener('click', () => {
-    percMode = !percMode;
-    percBtn.classList.toggle('on', percMode);
-    percBtn.setAttribute('aria-pressed', percMode);
-  });
-  undoBtn.addEventListener('click', () => {
-    for (let i = orgs.length - 1; i >= 0; i--) if (!orgs[i].dying){ orgs[i].dying = true; break; }
-  });
-  muteBtn.addEventListener('click', () => {
-    muted = !muted;
-    muteBtn.textContent = muted ? 'Sound off' : 'Sound on';
-    muteBtn.classList.toggle('off', muted);
-    if (muted) liveStop();
-    applyVolume();
-  });
-  clearBtn.addEventListener('click', () => { orgs.forEach(o => o.dying = true); });
-
-  // load your own sound
-  const sampleFile = $('sampleFile'), sampleBtn = $('sampleBtn'), sampleModeBtn = $('sampleModeBtn');
-  const SAMPLE_MODES = ['melody', 'drums', 'both', 'off'];
-  const SAMPLE_LABEL = {melody:'Melody', drums:'Drums', both:'Both', off:'Synth'};
-  function syncSampleUI(){
-    sampleModeBtn.textContent = 'Use: ' + SAMPLE_LABEL[sampleMode];
-    sampleModeBtn.classList.toggle('on', sampleMode !== 'off');
-  }
-  sampleBtn.addEventListener('click', () => sampleFile.click());
-  sampleModeBtn.addEventListener('click', () => {
-    sampleMode = SAMPLE_MODES[(SAMPLE_MODES.indexOf(sampleMode) + 1) % SAMPLE_MODES.length];
-    syncSampleUI();
-  });
-  sampleFile.addEventListener('change', async () => {
-    const f = sampleFile.files && sampleFile.files[0];
-    sampleFile.value = '';
-    if (!f) return;
-    if (f.size > 25e6){ showHint('That file is too large. Try one under 25 MB.', 4500); return; }
-    initAudio(); if (AC.state === 'suspended') AC.resume();
-    try {
-      const ab = await f.arrayBuffer();
-      const buf = await new Promise((res, rej) => AC.decodeAudioData(ab, res, rej));
-      const prep = prepSample(buf);
-      if (!prep) throw new Error('silent');
-      sampleNorm = Math.min(4, 1 / prep.peak);
-      sampleRoot = detectRoot(prep.buf);
-      sampleBuf = prep.buf; pointsState.stats.samples++;
-      if (sampleMode === 'off') sampleMode = 'melody';
-      sampleModeBtn.hidden = false; sampleBtn.textContent = 'Change sound';
-      syncSampleUI(); placePanel();
-      showHint(f.name.replace(/\.[^.]+$/, '').slice(0, 24) + ' loaded. Tuned to ' + noteName(sampleRoot) + '.', 5000);
-    } catch(err){
-      showHint('Could not read that audio file.', 4500);
-    }
-  });
-
-  // record the mix to an audio file
-  let rec = null, recChunks = [];
-  if (!window.MediaRecorder) recBtn.style.display = 'none';
-  recBtn.addEventListener('click', () => {
-    if (!recDest) return;
-    if (rec){ rec.stop(); return; }
-    const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
-    const mime = types.find(m => MediaRecorder.isTypeSupported(m)) || '';
-    let r;
-    try { r = new MediaRecorder(recDest.stream, mime ? {mimeType: mime} : undefined); }
-    catch(e){ showHint('Recording is not supported here.', 4000); return; }
-    rec = r; recChunks = [];
-    r.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
-    r.onstop = () => {
-      const type = r.mimeType || mime || 'audio/webm';
-      const ext = type.includes('ogg') ? 'ogg' : type.includes('mp4') ? 'm4a' : 'webm';
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob(recChunks, {type}));
-      a.download = 'inkling-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.' + ext;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-      rec = null; recBtn.textContent = 'Record'; recBtn.classList.remove('rec');
-      pointsState.stats.records++; savePoints();
-    };
-    r.start();
-    recBtn.textContent = 'Stop and save'; recBtn.classList.add('rec');
-  });
-
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && AC && AC.state === 'suspended') AC.resume();
-    if (document.hidden) savePoints();
-  });
-  window.addEventListener('pagehide', savePoints);
-  setInterval(savePoints, 10000);
-
-  $('begin').addEventListener('click', () => {
-    initAudio();
-    if (AC.state === 'suspended') AC.resume();
-    $('overlay').style.display = 'none';
-    showHint(offlineGreeting || 'Draw a line and listen to it.');
-  });
-
-  /* ---------- install as an app ---------- */
-  const installBtn = $('installBtn');
-  let installEvt = null;
-  window.addEventListener('beforeinstallprompt', e => {
-    e.preventDefault(); installEvt = e; installBtn.hidden = false; placePanel();
-  });
-  installBtn.addEventListener('click', async () => {
-    if (!installEvt) return;
-    const ev = installEvt; installEvt = null; installBtn.hidden = true;
-    try { ev.prompt(); await ev.userChoice; } catch(err){}
-    placePanel();
-  });
-  window.addEventListener('appinstalled', () => { installEvt = null; installBtn.hidden = true; showHint('Installed. Find Inkling with your other apps.', 5000); });
-  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
-    window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
-  }
-
-  resize();
-  requestAnimationFrame(frame);
-})();
-</script>
-</body>
-</html>
+      const h3 = document.createElement('h3'); h3.tex
