@@ -1,5 +1,5 @@
 /* Inkling service worker: app shell works offline. Bump VERSION when you change any cached file. */
-const VERSION = 'inkling-v1';
+const VERSION = 'inkling-v2';
 const SHELL = [
   './',
   './index.html',
