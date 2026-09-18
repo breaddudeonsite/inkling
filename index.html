@@ -79,6 +79,37 @@
   #panel input[type=range]{grid-column:1 / -1;width:100%;height:30px;margin:0;accent-color:var(--glow);touch-action:manipulation}
   #panel .row{display:flex;gap:8px;margin-top:4px}
   #panel .row .pill{flex:1;text-align:center}
+  .pill.gain{background:rgba(255,177,92,.32);border-color:var(--ember);transition:background .25s ease}
+
+  #shop{
+    position:fixed;right:12px;z-index:6;display:none;
+    width:min(320px, calc(100vw - 24px));max-height:min(72vh, 560px);overflow:auto;
+    padding:16px 18px 14px;
+    background:rgba(21,24,55,.9);border:1px solid rgba(201,198,242,.22);border-radius:20px;
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  }
+  #shop.open{display:block}
+  #shop h2{font-family:var(--serif);font-style:italic;font-weight:600;font-size:19px;margin:0 0 10px;color:var(--mist)}
+  #shop .tabs{display:flex;gap:8px;margin-bottom:12px}
+  #shop .tab{flex:1;text-align:center;font:600 13px var(--sans);padding:8px;border-radius:999px;
+    border:1px solid rgba(201,198,242,.22);background:transparent;color:var(--dim);cursor:pointer;touch-action:manipulation}
+  #shop .tab.on{background:rgba(143,227,255,.14);border-color:var(--glow);color:var(--mist)}
+  #shop .bal{font-size:13px;color:var(--glow);margin-bottom:12px}
+  #shop .item{border-top:1px solid rgba(201,198,242,.14);padding:10px 0}
+  #shop .item:first-child{border-top:none;padding-top:0}
+  #shop .item h3{margin:0 0 2px;font-size:14px;color:var(--mist);font-weight:600}
+  #shop .item p{margin:0 0 8px;font-size:12.5px;color:var(--dim);line-height:1.35}
+  #shop .item p.reqline{font-style:italic;color:var(--ember);margin-bottom:8px}
+  #shop .item .row2{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  #shop .cost{font-size:12.5px;color:var(--glow);font-variant-numeric:tabular-nums}
+  #shop button.buy, #shop button.use{
+    font:600 13px var(--sans);border-radius:999px;cursor:pointer;padding:6px 14px;
+    background:rgba(143,227,255,.14);border:1px solid var(--glow);color:var(--mist);
+    min-height:34px;touch-action:manipulation;
+  }
+  #shop button.buy:disabled{opacity:.4;cursor:default;border-color:rgba(201,198,242,.22);background:transparent}
+  #shop button.use{background:transparent;border-color:rgba(201,198,242,.3);font-size:12px;padding:5px 12px}
+  #shop button.use.active{background:rgba(255,177,92,.18);border-color:var(--ember);color:#ffe3c2}
 
   #overlay{
     position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;
@@ -115,6 +146,7 @@
   <button class="pill" id="clearBtn" type="button">Clear</button>
   <button class="pill" id="muteBtn" type="button">Sound on</button>
   <button class="pill" id="mixBtn" type="button" aria-expanded="false" aria-controls="panel">Mix</button>
+  <button class="pill" id="pointsBtn" type="button" aria-expanded="false" aria-controls="shop">✦ 0</button>
   <button class="pill" id="installBtn" type="button" hidden>Install</button>
 </div>
 
@@ -127,7 +159,22 @@
     <input type="range" id="space" min="0" max="100" step="1" value="45"></label>
   <label>Volume <output id="volOut">75%</output>
     <input type="range" id="vol" min="0" max="100" step="1" value="75"></label>
+  <div class="row" style="margin-bottom:8px">
+    <button class="pill" id="sampleBtn" type="button">Load sound</button>
+    <button class="pill" id="sampleModeBtn" type="button" hidden>Use: Melody</button>
+  </div>
+  <input type="file" id="sampleFile" accept="audio/*" hidden>
   <div class="row"><button class="pill" id="recBtn" type="button">Record</button></div>
+</div>
+
+<div id="shop" role="group" aria-label="Points, skills and unlocks">
+  <h2>Progress</h2>
+  <div class="tabs">
+    <button class="tab on" id="tabUnlocks" type="button">Unlocks</button>
+    <button class="tab" id="tabSkills" type="button">Skills</button>
+  </div>
+  <div class="bal" id="shopBal"></div>
+  <div id="shopList"></div>
 </div>
 
 <div id="hint"></div>
@@ -176,8 +223,96 @@
   const saved = loadPrefs();
   const pick = (v, lo, hi, d) => (typeof v === 'number' && isFinite(v) && v >= lo && v <= hi) ? v : d;
 
+  /* ---------- points & unlocks ---------- */
+  const THEME_DEFS = {
+    default: {name:'Ink theme (default)',    abyss:'#0b0d1e', deep:'#151837', mist:'#c9c6f2', dim:'#7f7cad', glow:'#8fe3ff', ember:'#ffb15c'},
+    ember:   {name:'Ember theme',            abyss:'#1a0d0b', deep:'#3a1815', mist:'#f2d9c6', dim:'#ad8a7c', glow:'#ffb15c', ember:'#ff6b4a'},
+    deepsea: {name:'Deep Sea theme',         abyss:'#050b14', deep:'#0d2438', mist:'#c6e8f2', dim:'#6f9aad', glow:'#5ce3ff', ember:'#b98fff'},
+    aurora:  {name:'Aurora theme',           abyss:'#08140d', deep:'#123322', mist:'#d3f2c6', dim:'#7fad86', glow:'#8fffb1', ember:'#ff8fd0'}
+  };
+  const SKIN_DEFS = {
+    default: {name:'Prism creatures (default)', shift:0},
+    neon:    {name:'Neon creatures',             shift:140},
+    sunset:  {name:'Sunset creatures',           shift:20},
+    violet:  {name:'Violet creatures',           shift:260}
+  };
+  const UNLOCKS = [
+    {id:'theme:default',        kind:'theme', name:THEME_DEFS.default.name, cost:0,  desc:'The original palette.'},
+    {id:'skin:default',         kind:'skin',  name:SKIN_DEFS.default.name,  cost:0,  desc:'The original creature colours.'},
+    {id:'scale:Mixolydian',     kind:'scale', name:'Mixolydian scale',      cost:40, desc:'Brighter, major-leaning colour.'},
+    {id:'scale:Phrygian',       kind:'scale', name:'Phrygian scale',        cost:40, desc:'Dark, exotic half-step below the tonic.'},
+    {id:'scale:Harmonic minor', kind:'scale', name:'Harmonic minor scale',  cost:55, desc:'Classic, dramatic minor scale.'},
+    {id:'scale:Chromatic',      kind:'scale', name:'Chromatic scale',       cost:80, desc:'Every note. No rules.'},
+    {id:'theme:ember',          kind:'theme', name:THEME_DEFS.ember.name,   cost:30, desc:'Warm oranges and a deep red glow.'},
+    {id:'theme:deepsea',        kind:'theme', name:THEME_DEFS.deepsea.name, cost:30, desc:'Teal and violet depths.'},
+    {id:'theme:aurora',         kind:'theme', name:THEME_DEFS.aurora.name,  cost:45, desc:'Green and pink northern lights.'},
+    {id:'skin:neon',            kind:'skin',  name:SKIN_DEFS.neon.name,     cost:35, desc:'Electric, hue-shifted creatures.'},
+    {id:'skin:sunset',          kind:'skin',  name:SKIN_DEFS.sunset.name,   cost:35, desc:'Warm-shifted creature colours.'},
+    {id:'skin:violet',          kind:'skin',  name:SKIN_DEFS.violet.name,   cost:50, desc:'Cool violet-shifted creatures.'}
+  ];
+  // a small skill tree: idle income and creature income both branch to 2-3 tiers,
+  // plus a few standalone gameplay perks. effect keys are summed into skillStats.
+  const SKILLS = [
+    {id:'skill:idle1',    kind:'skill', name:'Quiet Hum',      cost:20,  requires:null,          effect:{idleRate:0.15}, desc:'Creatures keep humming softly — earns points even with the app closed.'},
+    {id:'skill:idle2',    kind:'skill', name:'Sleepwalking',   cost:60,  requires:'skill:idle1', effect:{idleRate:0.35}, desc:'The hum deepens. More idle income, always running.'},
+    {id:'skill:idle3',    kind:'skill', name:'Dream Chorus',   cost:150, requires:'skill:idle2', effect:{idleRate:1},    desc:'A full idle chorus sings on, even while you are away.'},
+    {id:'skill:chorus1',  kind:'skill', name:'Chorus',         cost:30,  requires:null,           effect:{creatureMult:0.5}, desc:'Creatures on screen earn 50% more points per second while you play.'},
+    {id:'skill:chorus2',  kind:'skill', name:'Full Ensemble',  cost:90,  requires:'skill:chorus1',effect:{creatureMult:1.0}, desc:'A richer ensemble: another +100% from creatures on screen.'},
+    {id:'skill:ink1',     kind:'skill', name:'Generous Ink',   cost:45,  requires:null,           effect:{spawnBonus:1},  desc:'Every new creature you draw is worth one extra point.'},
+    {id:'skill:menagerie',kind:'skill', name:'Bigger Menagerie',cost:70, requires:null,           effect:{maxOrgs:4},     desc:'Keep 4 more creatures alive on screen at once.'},
+    {id:'skill:breath',   kind:'skill', name:'Longer Breath',  cost:70,  requires:null,           effect:{droneCap:2},    desc:'Keep 2 more drones breathing at once.'},
+    {id:'skill:voices',   kind:'skill', name:'Extra Voices',   cost:85,  requires:null,           effect:{voiceCap:14},   desc:'More notes can sound at once without cutting out.'}
+  ];
+  const PKEY = 'inkling.points.v1';
+  function loadPoints(){
+    try {
+      const p = JSON.parse(localStorage.getItem(PKEY) || '{}') || {};
+      return {
+        points: (typeof p.points === 'number' && isFinite(p.points)) ? Math.max(0, p.points) : 0,
+        unlocked: Array.isArray(p.unlocked) ? p.unlocked.filter(x => typeof x === 'string') : [],
+        theme: typeof p.theme === 'string' ? p.theme : 'default',
+        skin: typeof p.skin === 'string' ? p.skin : 'default',
+        lastSeen: (typeof p.lastSeen === 'number' && isFinite(p.lastSeen)) ? p.lastSeen : 0
+      };
+    } catch(e){ return {points:0, unlocked:[], theme:'default', skin:'default', lastSeen:0}; }
+  }
+  const pointsState = loadPoints();
+  function savePoints(){ pointsState.lastSeen = Date.now(); try { localStorage.setItem(PKEY, JSON.stringify(pointsState)); } catch(e){} }
+  function isUnlocked(id){ return id === 'theme:default' || id === 'skin:default' || pointsState.unlocked.indexOf(id) !== -1; }
+  let skillStats = {idleRate:0, creatureMult:0, spawnBonus:0, maxOrgs:0, droneCap:0, voiceCap:0};
+  function computeSkillStats(){
+    const s = {idleRate:0, creatureMult:0, spawnBonus:0, maxOrgs:0, droneCap:0, voiceCap:0};
+    SKILLS.forEach(sk => {
+      if (sk.effect && isUnlocked(sk.id)) for (const k in sk.effect) s[k] = (s[k] || 0) + sk.effect[k];
+    });
+    skillStats = s;
+  }
+  computeSkillStats();
+  // credit any idle income earned while the app was closed, based on the always-on idle rate from skills
+  let offlineGreeting = null;
+  if (pointsState.lastSeen > 0 && skillStats.idleRate > 0){
+    const offlineSec = Math.max(0, (Date.now() - pointsState.lastSeen) / 1000);
+    const gain = skillStats.idleRate * offlineSec;
+    if (gain >= 1){ pointsState.points += gain; offlineGreeting = 'While you were away: +' + Math.floor(gain) + ' points.'; }
+  }
+  function earnPoints(n){
+    if (!(n > 0)) return;
+    pointsState.points += n;
+    savePoints();
+    updatePointsUI();
+    flashPoints();
+  }
+  function applyTheme(id){
+    const th = THEME_DEFS[id] || THEME_DEFS.default;
+    const root = document.documentElement.style;
+    root.setProperty('--abyss', th.abyss); root.setProperty('--deep', th.deep);
+    root.setProperty('--mist', th.mist); root.setProperty('--dim', th.dim);
+    root.setProperty('--glow', th.glow); root.setProperty('--ember', th.ember);
+  }
+  applyTheme(pointsState.theme);
+
   /* ---------- music theory ---------- */
-  const SCALES = {
+  const BASE_SCALES = {
     'Pentatonic': [0,2,4,7,9],
     'Minor pent': [0,3,5,7,10],
     'Dorian':     [0,2,3,5,7,9,10],
@@ -187,32 +322,33 @@
     'Whole tone': [0,2,4,6,8,10],
     'Blues':      [0,3,5,6,7,10]
   };
-  const scaleNames = Object.keys(SCALES);
+  const LOCKED_SCALES = {
+    'Mixolydian':     [0,2,4,5,7,9,10],
+    'Phrygian':       [0,1,3,5,7,8,10],
+    'Harmonic minor': [0,2,3,5,7,8,11],
+    'Chromatic':      [0,1,2,3,4,5,6,7,8,9,10,11]
+  };
+  const SCALES = Object.assign({}, BASE_SCALES, LOCKED_SCALES);
+  let scaleNames = [];
+  function computeScaleNames(){
+    const prevName = scaleNames[scaleIdx];
+    scaleNames = Object.keys(BASE_SCALES).concat(Object.keys(LOCKED_SCALES).filter(n => isUnlocked('scale:' + n)));
+    if (prevName){
+      const idx = scaleNames.indexOf(prevName);
+      if (idx >= 0) scaleIdx = idx;
+    }
+  }
   // keys walk the circle of fifths so each tap lands somewhere closely related
   const KEYS = [['C',0],['G',7],['D',2],['A',9],['E',4],['B',11],['F♯',6],['D♭',1],['A♭',8],['E♭',3],['B♭',10],['F',5]];
   const NOTE_NAMES = ['C','D♭','D','E♭','E','F','F♯','G','A♭','A','B♭','B'];
-  let scaleIdx = pick(saved.scaleIdx, 0, scaleNames.length - 1, 0) | 0;
+  let scaleIdx = 0;
+  computeScaleNames();
+  scaleIdx = pick(saved.scaleIdx, 0, scaleNames.length - 1, 0) | 0;
   let keyIdx = pick(saved.keyIdx, 0, KEYS.length - 1, 0) | 0;
   const OCT = 3;                 // octaves spanned by screen height
   let baseMidi = 48;
   function applyKey(){ const r = KEYS[keyIdx][1]; baseMidi = 48 + (r > 6 ? r - 12 : r); }
   applyKey();
-
-  // slow harmonic drift: every 45-90s of active life, the whole piece steps one place
-  // around the circle of fifths, so a long-running drawing modulates instead of looping forever in one key
-  let keyDriftTimer = null;
-  function scheduleKeyDrift(){
-    const delay = 45000 + Math.random() * 45000;
-    keyDriftTimer = setTimeout(() => {
-      if (!stroke && orgs.some(o => !o.dying)){
-        keyIdx = (keyIdx + (Math.random() < 0.5 ? 1 : -1) + KEYS.length) % KEYS.length;
-        applyKey();
-        keyBtn.textContent = 'Key ' + KEYS[keyIdx][0];
-        savePrefs();
-      }
-      scheduleKeyDrift();
-    }, delay);
-  }
 
   /* ---------- tempo grid ---------- */
   let bpm = pick(saved.bpm, 40, 140, 72) | 0;
@@ -237,12 +373,15 @@
   }
   function noteFromY(y){ return noteFromDeg(degFromY(y)); }
   function noteName(midi){ return NOTE_NAMES[((midi % 12) + 12) % 12]; }
+  let skinShift = (SKIN_DEFS[pointsState.skin] || SKIN_DEFS.default).shift;
   function hueOf(y, kind){
     const t = 1 - Math.min(1, Math.max(0, y / H));
-    if (kind === 'bass') return 262 + t * 30;
-    if (kind === 'sweep') return 178 + t * 40;
-    if (kind === 'arp') return 34 + t * 40;
-    return kind ? 22 + t * 34 : (200 + t * 200) % 360;
+    let h;
+    if (kind === 'bass') h = 262 + t * 30;
+    else if (kind === 'sweep') h = 178 + t * 40;
+    else if (kind === 'arp') h = 34 + t * 40;
+    else h = kind ? 22 + t * 34 : (200 + t * 200) % 360;
+    return h + skinShift;
   }
   // hue for an organism, aware of its type (perc / bass / sweep / arp / lead / drone)
   function orgHue(o, y){ return hueOf(y, o.type === 'bass' || o.type === 'sweep' || o.type === 'arp' ? o.type : o.perc); }
@@ -309,17 +448,6 @@
     verbIn.connect(pre); pre.connect(conv); conv.connect(vlp); vlp.connect(verbWet); verbWet.connect(master);
     applySpace();
 
-    // three independently-rated slow LFOs breathe the echo and reverb tone open and shut —
-    // never repeating in lockstep, which is what reads as a swirl rather than a wobble
-    const swirl = (target, hz, depth) => {
-      const o = AC.createOscillator(); o.type = 'sine'; o.frequency.value = hz;
-      const g = AC.createGain(); g.gain.value = depth;
-      o.connect(g); g.connect(target); o.start();
-    };
-    swirl(lpL.frequency, 0.037, 1300);
-    swirl(lpR.frequency, 0.029, 1200);
-    swirl(vlp.frequency, 0.021, 1800);
-
     const len = AC.sampleRate * 2;
     noiseBuf = AC.createBuffer(1, len, AC.sampleRate);
     const d = noiseBuf.getChannelData(0);
@@ -327,7 +455,6 @@
 
     tr.T0 = AC.currentTime + 0.06; tr.off = 0; tr.next = 0;
     setInterval(scheduler, 25);
-    scheduleKeyDrift();
   }
 
   function applySpace(){
@@ -354,8 +481,52 @@
   }
   function release(nodes){ nodes.forEach(n => { try { n.disconnect(); } catch(e){} }); }
 
+  /* ---------- user-loaded sound ---------- */
+  let sampleBuf = null, sampleRoot = 60, sampleNorm = 1, sampleMode = 'melody';   // mode: melody | drums | both | off
+  const sampleFor = kind => !!sampleBuf && (sampleMode === 'both' || sampleMode === kind);
+  function samplePlay(rate, vel, pan, dur, at, d, r, level){
+    rate = clamp(rate, 0.1, 8);
+    const t = Math.max(AC.currentTime, at || 0);
+    const len = Math.max(0.05, Math.min(dur, sampleBuf.duration / rate));
+    const src = AC.createBufferSource(); src.buffer = sampleBuf; src.playbackRate.value = rate;
+    const amp = AC.createGain(), p = panner(pan), g = Math.max(0.001, vel * level * sampleNorm);
+    amp.gain.setValueAtTime(0.0001, t);
+    amp.gain.linearRampToValueAtTime(g, t + 0.004);
+    amp.gain.setValueAtTime(g, t + Math.max(0.006, len - 0.08));
+    amp.gain.exponentialRampToValueAtTime(0.0008, t + len);
+    src.connect(amp); amp.connect(p);
+    const nodes = [amp, p, ...bus(p, d, r)];
+    src.start(t); src.stop(t + len + 0.02);
+    voices++;
+    src.onended = () => { voices--; release(nodes); };
+  }
+  // rough pitch estimate (autocorrelation on the loudest stretch) so melodies play in tune; falls back to C4
+  function detectRoot(buf){
+    const sr = buf.sampleRate, ch = buf.getChannelData(0);
+    const W = 3072, minLag = Math.floor(sr / 1000), maxLag = Math.floor(sr / 60);
+    const limit = Math.min(ch.length - (W + maxLag) - 1, sr * 6);
+    if (limit <= 0) return 60;
+    let start = 0, bestE = 0;
+    for (let s = 0; s < limit; s += 1024){
+      let e = 0; for (let i = 0; i < W; i += 4) e += ch[s + i] * ch[s + i];
+      if (e > bestE){ bestE = e; start = s; }
+    }
+    if (bestE < 1e-6) return 60;
+    const x = ch.subarray(start, start + W + maxLag + 1);
+    let r0 = 0; for (let i = 0; i < W; i++) r0 += x[i] * x[i];
+    let bestLag = 0, bestR = 0, dropped = false;
+    for (let lag = minLag; lag <= maxLag; lag++){
+      let sum = 0; for (let i = 0; i < W; i++) sum += x[i] * x[i + lag];
+      if (!dropped){ if (sum < 0) dropped = true; continue; }
+      if (sum > bestR){ bestR = sum; bestLag = lag; }
+    }
+    if (!bestLag || bestR / r0 < 0.5) return 60;
+    return clamp(Math.round(69 + 12 * Math.log2((sr / bestLag) / 440)), 36, 84);
+  }
+
   function pluck({midi, vel, tilt = 0.3, pan = 0, dur = 0.9, at = 0}){
-    if (!AC || muted || voices >= VOICE_CAP) return;
+    if (!AC || muted || voices >= VOICE_CAP + skillStats.voiceCap) return;
+    if (sampleFor('melody')) return samplePlay(Math.pow(2, (midi - sampleRoot) / 12), vel, pan, dur, at, 0.42, 0.5, 0.5);
     const t = Math.max(AC.currentTime, at), f = mtof(midi), end = t + dur + 0.08;
     const amp = AC.createGain();
     amp.gain.setValueAtTime(0.0001, t);
@@ -390,7 +561,8 @@
   // long, mostly-straight strokes get a real low end: sub sine + a softer triangle body,
   // narrower stereo image and a drier send so the low end stays tight instead of smearing in the verb
   function bass({midi, vel, tilt = 0.3, pan = 0, dur = 1.6, at = 0}){
-    if (!AC || muted || voices >= VOICE_CAP) return;
+    if (!AC || muted || voices >= VOICE_CAP + skillStats.voiceCap) return;
+    if (sampleFor('melody')) return samplePlay(Math.pow(2, (midi - sampleRoot) / 12), vel, pan * 0.45, dur, at, 0.1, 0.16, 0.6);
     const t = Math.max(AC.currentTime, at), f = mtof(midi), end = t + dur + 0.12;
     const amp = AC.createGain();
     amp.gain.setValueAtTime(0.0001, t);
@@ -417,7 +589,7 @@
 
   // a spiral sweeps a bandpassed noise + saw across the register — rising if it winds inward, falling if it unwinds
   function sweep({midi, vel, tilt = 0.3, pan = 0, dur = 1.6, at = 0, inward = true}){
-    if (!AC || muted || voices >= VOICE_CAP) return;
+    if (!AC || muted || voices >= VOICE_CAP + skillStats.voiceCap) return;
     const t = Math.max(AC.currentTime, at), f = mtof(midi), end = t + dur + 0.15;
     const amp = AC.createGain();
     amp.gain.setValueAtTime(0.0001, t);
@@ -443,7 +615,8 @@
   }
 
   function drum({midi, vel, pan = 0, at = 0, kind = 0}){
-    if (!AC || muted || voices >= VOICE_CAP) return;
+    if (!AC || muted || voices >= VOICE_CAP + skillStats.voiceCap) return;
+    if (sampleFor('drums')) return samplePlay([0.7, 1, 1.6][kind], vel, pan, [0.6, 0.4, 0.22][kind], at, 0.15, kind === 0 ? 0.08 : 0.24, 0.7);
     const t = Math.max(AC.currentTime, at);
     const p = panner(pan);
     const nodes = [p, ...bus(p, 0.15, kind === 0 ? 0.08 : 0.24)];
@@ -614,6 +787,8 @@
   let percMode = false;
   let lastPenTime = 0;
   const MAX_ORGS = 12;
+  // points/sec each living creature type earns while the app is open, before the Chorus/Full Ensemble multiplier
+  const CREATURE_RATE = {perc:0.015, lead:0.035, drone:0.08, bass:0.05, sweep:0.06, arp:0.05};
 
   const barrel = e => !!(e.buttons & 2) || !!(e.buttons & 32) || e.button === 2;
   const tiltOf = e => Math.min(1, Math.hypot(e.tiltX || 0, e.tiltY || 0) / 65);
@@ -684,7 +859,7 @@
     if (e.pointerType === 'touch' && (stroke || performance.now() - lastPenTime < 1500)) return;
     if (stroke) return;
     e.preventDefault();
-    closePanel();
+    closePanel(); closeShop();
     try { canvas.setPointerCapture(e.pointerId); } catch(err){}
     activeId = e.pointerId;
     startStroke(e);
@@ -735,36 +910,7 @@
 
   const CHORD_CV = 0.017;   // rad per px: curls tighter than ~58px radius play chords
   const CORNER_ANGLE = 1.05; // rad: a single sharp bend, distinct from a sustained curl
-  const seen = {drone: false, curl: false, bass: false, arp: false, sweep: false, cluster: false, evolve: false};
-
-  // ---------- shared harmony: everything drawn breathes the same chord progression ----------
-  // roots are scale-degree steps (mod the current scale's length), stacked in skip-a-step
-  // thirds the same way clusters and strums already build chords, so it reads as one language.
-  // the progression itself loops slowly (I-IV-V-vi-ish motion, generalized to any scale) and
-  // resets whenever the scale or key changes so it never clashes with a fresh palette.
-  const CHORD_LEN = 64;             // steps per chord = 4 bars at 16 steps/bar
-  const PROGRESSION = [0, 3, 4, 1];
-  function chordRootAt(g){
-    const len = SCALES[scaleNames[scaleIdx]].length;
-    return PROGRESSION[Math.floor(g / CHORD_LEN) % PROGRESSION.length] % len;
-  }
-  function chordTonesAt(g){
-    const len = SCALES[scaleNames[scaleIdx]].length, root = chordRootAt(g);
-    return new Set([root % len, (root + 2) % len, (root + 4) % len]);
-  }
-  // pull a degree toward the current chord: strong beats snap fully, weak beats mostly hold but
-  // sometimes let a passing tone through, which is what keeps it feeling drawn rather than quantized
-  function gravitate(deg, g, acc){
-    const len = SCALES[scaleNames[scaleIdx]].length;
-    const tones = chordTonesAt(g);
-    const cls = ((deg % len) + len) % len;
-    if (tones.has(cls)) return deg;
-    const pull = acc > 0.9 ? 1 : acc > 0.8 ? 0.6 : 0.22;
-    if (Math.random() > pull) return deg;
-    let best = cls, bestDist = len;
-    tones.forEach(ct => { const d = Math.min(Math.abs(ct - cls), len - Math.abs(ct - cls)); if (d < bestDist){ bestDist = d; best = ct; } });
-    return deg - cls + best;
-  }
+  const seen = {drone: false, curl: false, bass: false, arp: false, sweep: false, cluster: false};
 
   function spawn(s){
     const sp = Math.max(8, s.dist / 90);
@@ -847,7 +993,6 @@
       energy: closed ? 0.5 : clamp(0.5 * speedFactor, 0.35, 1.2), pulse: 0, alpha: 1, dying: false,
       near: false, wakeCool: 0, phase: Math.random() * 6.28,
       clusterSize: 1, clusterDeg: null,
-      pitchOffsets: {}, lastCycle: AC ? Math.floor(gridPos() / steps) : 0,
       wx: new Float32Array(N), wy: new Float32Array(N)
     };
     for (let i = 0; i < N; i++){ o.wx[i] = cx + pts[i].lx; o.wy[i] = cy + pts[i].ly; }
@@ -859,11 +1004,14 @@
     orgs.push(o);
 
     const alive = orgs.filter(x => !x.dying);
-    if (alive.length > MAX_ORGS) alive[0].dying = true;
+    if (alive.length > MAX_ORGS + skillStats.maxOrgs) alive[0].dying = true;
     const drones = orgs.filter(x => x.drone && !x.dying);
-    if (drones.length > 4) drones[0].dying = true;
+    if (drones.length > 4 + skillStats.droneCap) drones[0].dying = true;
 
     spawnCount++;
+    let ptGain = 2 + (skillStats.spawnBonus || 0);
+    if (o.type === 'drone' || o.type === 'sweep' || o.type === 'bass' || o.type === 'arp') ptGain += 1;
+    earnPoints(ptGain);
     if (o.drone && !seen.drone){ seen.drone = true; showHint('A closed loop becomes a drone. It breathes.', 7000); }
     else if (o.type === 'sweep' && !seen.sweep){ seen.sweep = true; showHint('A spiral sweeps the filter open.', 7000); }
     else if (o.type === 'bass' && !seen.bass){ seen.bass = true; showHint('A long, straight line runs low — that one is the bass.', 7000); }
@@ -874,63 +1022,23 @@
     else if (spawnCount === 5) showHint('Try Key and Scale up top, and the Mix panel for tempo and space.', 8000);
   }
 
-  // recompute how long each hit has to ring after the hit set itself has changed
-  function regapOrg(o){
-    const hs = [...o.hits].sort((a, b) => a - b);
-    const gaps = {};
-    hs.forEach((h, i) => { gaps[h] = (i + 1 < hs.length ? hs[i + 1] : hs[0] + o.steps) - h; });
-    o.gaps = gaps;
-  }
-
-  // a creature's pattern is not fixed at birth: each time it completes a full loop it may
-  // grow a new hit next to one it already has, let an old one rest, or nudge one note's pitch
-  // by a scale step — small, bounded mutations so the shape keeps its character but drifts over its life
-  function evolve(o){
-    if (o.perc || o.drone) return;
-    if (Math.random() < 0.35){
-      const active = [...o.hits];
-      if (Math.random() < 0.5 && active.length < o.steps - 1){
-        const anchor = active[Math.floor(Math.random() * active.length)];
-        const cand = (anchor + (Math.random() < 0.5 ? 1 : -1) + o.steps) % o.steps;
-        if (!o.hits.has(cand)){ o.hits.add(cand); regapOrg(o); }
-      } else if (active.length > 2){
-        const drop = active[Math.floor(Math.random() * active.length)];
-        o.hits.delete(drop); delete o.pitchOffsets[drop]; regapOrg(o);
-      }
-      if (!seen.evolve){ seen.evolve = true; showHint('Leave one alive a while — it grows and changes its tune.', 7000); }
-    }
-    if (o.hits.size && Math.random() < 0.5){
-      const arr = [...o.hits];
-      const h = arr[Math.floor(Math.random() * arr.length)];
-      const cur = o.pitchOffsets[h] || 0;
-      o.pitchOffsets[h] = clamp(cur + (Math.random() < 0.5 ? 1 : -1), -3, 3);
-    }
-    if (Math.random() < 0.08){
-      o.octaveShift = clamp((o.octaveShift || 0) + (Math.random() < 0.5 ? 1 : -1), -2, 2);
-    }
-    o.phaseDrift = clamp((o.phaseDrift || 0) + (Math.random() - 0.5) * STEP * 0.2, -STEP * 1.5, STEP * 1.5);
-  }
-
   // called once per sixteenth note, ahead of time, with the exact audio-clock time
   function scheduleStep(g, tg){
     const acc = g % 16 === 0 ? 1 : g % 4 === 0 ? 0.92 : g % 2 === 0 ? 0.84 : 0.74;   // gentle metric accent
     const sw = (g & 1) ? swing * STEP * 0.4 : 0;
     for (const o of orgs){
       if (o.dying || o.drone) continue;
-      const cycle = Math.floor(g / o.steps);
-      if (cycle !== o.lastCycle){ o.lastCycle = cycle; evolve(o); }
       const s = g % o.steps;
-      if (o.hits.has(s)) fire(o, s, tg + sw + (o.phaseDrift || 0) + (Math.random() - 0.5) * 0.006, acc, g);
+      if (o.hits.has(s)) fire(o, s, tg + sw + (Math.random() - 0.5) * 0.006, acc);
     }
   }
 
-  function fire(o, s, at, acc, g){
+  function fire(o, s, at, acc){
     const idx = Math.min(o.N - 1, Math.round(s / o.steps * (o.N - 1)));
     const p = o.pts[idx], x = o.wx[idx], y = o.wy[idx];
     const py = o.cy + p.ly;                     // pitch from the resting shape, so wobble does not flip notes
     // clustered creatures (3+, huddled close) lock onto a shared chord instead of reading their own shape's height
-    let deg = (o.clusterSize >= 3 && o.clusterDeg != null) ? o.clusterDeg : degFromY(py) + (o.pitchOffsets[s] || 0);
-    deg = gravitate(deg, g, acc);
+    const deg = (o.clusterSize >= 3 && o.clusterDeg != null) ? o.clusterDeg : degFromY(py);
     const oct = (o.octaveShift || 0) * 12;
     const vel = Math.min(1, (0.25 + 0.75 * p.p) * (0.4 + 0.6 * Math.min(1, o.energy))) * o.alpha * acc * (0.92 + Math.random() * 0.16);
     const pan = clamp((x / W) * 2 - 1, -1, 1);
@@ -1290,10 +1398,19 @@
   }
 
   let last = performance.now();
+  let uiAccum = 0;
   function frame(now){
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     const t = now / 1000;
     if (AC) runVisuals();
+    // idle income: a flat rate from skills (runs always, even before drawing starts)
+    // plus a per-creature rate for whatever is alive on screen right now, boosted by the Chorus skills
+    let creatureRate = 0;
+    for (const o of orgs) if (!o.dying) creatureRate += (CREATURE_RATE[o.type] || 0.02);
+    const rate = skillStats.idleRate + creatureRate * (1 + skillStats.creatureMult);
+    if (rate > 0) pointsState.points += rate * dt;
+    uiAccum += dt;
+    if (uiAccum >= 0.5){ uiAccum = 0; updatePointsUI(); savePoints(); }
     const gp = AC ? gridPos() : t / STEP;
     ctx.globalCompositeOperation = 'source-over';
     ctx.clearRect(0, 0, W, H);
@@ -1315,6 +1432,9 @@
   const scaleBtn = $('scaleBtn'), keyBtn = $('keyBtn'), percBtn = $('percBtn'), undoBtn = $('undoBtn');
   const muteBtn = $('muteBtn'), clearBtn = $('clearBtn'), mixBtn = $('mixBtn'), recBtn = $('recBtn');
   const panel = $('panel'), bar = $('bar');
+  const pointsBtn = $('pointsBtn'), shop = $('shop'), shopBal = $('shopBal'), shopList = $('shopList');
+  const tabUnlocksBtn = $('tabUnlocks'), tabSkillsBtn = $('tabSkills');
+  let shopTab = 'unlocks';
   const sliders = {
     bpm:   {el: $('bpm'),   out: $('bpmOut'),   fmt: v => v + ' BPM'},
     swing: {el: $('swing'), out: $('swingOut'), fmt: v => v + '%'},
@@ -1323,12 +1443,95 @@
   };
 
   function placePanel(){
-    if (!bar || !panel) return;
-    panel.style.top = (bar.getBoundingClientRect().bottom + 8) + 'px';
+    if (!bar) return;
+    const top = (bar.getBoundingClientRect().bottom + 8) + 'px';
+    if (panel) panel.style.top = top;
+    if (shop) shop.style.top = top;
   }
-  function openPanel(){ placePanel(); panel.classList.add('open'); mixBtn.setAttribute('aria-expanded', 'true'); mixBtn.classList.add('on'); }
+  function openPanel(){ placePanel(); closeShop(); panel.classList.add('open'); mixBtn.setAttribute('aria-expanded', 'true'); mixBtn.classList.add('on'); }
   function closePanel(){ panel.classList.remove('open'); mixBtn.setAttribute('aria-expanded', 'false'); mixBtn.classList.remove('on'); }
   mixBtn.addEventListener('click', () => panel.classList.contains('open') ? closePanel() : openPanel());
+
+  function updatePointsUI(){
+    if (!pointsBtn) return;
+    pointsBtn.textContent = '✦ ' + Math.floor(pointsState.points);
+  }
+  function flashPoints(){
+    if (!pointsBtn) return;
+    pointsBtn.classList.add('gain');
+    clearTimeout(flashPoints._t);
+    flashPoints._t = setTimeout(() => pointsBtn.classList.remove('gain'), 260);
+  }
+  function openShop(){ placePanel(); closePanel(); renderShop(); shop.classList.add('open'); pointsBtn.setAttribute('aria-expanded', 'true'); pointsBtn.classList.add('on'); }
+  function closeShop(){ if (!shop) return; shop.classList.remove('open'); pointsBtn.setAttribute('aria-expanded', 'false'); pointsBtn.classList.remove('on'); }
+  pointsBtn.addEventListener('click', () => shop.classList.contains('open') ? closeShop() : openShop());
+  function setShopTab(tab){
+    shopTab = tab;
+    tabUnlocksBtn.classList.toggle('on', tab === 'unlocks');
+    tabSkillsBtn.classList.toggle('on', tab === 'skills');
+    renderShop();
+  }
+  tabUnlocksBtn.addEventListener('click', () => setShopTab('unlocks'));
+  tabSkillsBtn.addEventListener('click', () => setShopTab('skills'));
+
+  function buyEntry(u){
+    if (isUnlocked(u.id) || pointsState.points < u.cost) return;
+    if (u.requires && !isUnlocked(u.requires)) return;
+    pointsState.points -= u.cost;
+    pointsState.unlocked.push(u.id);
+    if (u.kind === 'scale'){ computeScaleNames(); scaleBtn.textContent = scaleNames[scaleIdx]; savePrefs(); }
+    if (u.effect) computeSkillStats();
+    savePoints();
+    updatePointsUI();
+    renderShop();
+    showHint(u.name + (u.kind === 'skill' ? ' learned.' : ' unlocked.'), 4000);
+  }
+  function setActive(kind, val){
+    if (kind === 'theme'){ pointsState.theme = val; applyTheme(val); }
+    else if (kind === 'skin'){ pointsState.skin = val; skinShift = (SKIN_DEFS[val] || SKIN_DEFS.default).shift; }
+    savePoints();
+    renderShop();
+  }
+  function renderShop(){
+    if (!shopList) return;
+    const idleTxt = skillStats.idleRate > 0 ? (' • idle income ' + skillStats.idleRate.toFixed(2) + ' pts/sec, always') : '';
+    shopBal.textContent = Math.floor(pointsState.points) + ' points' + idleTxt;
+    shopList.innerHTML = '';
+    const list = shopTab === 'skills' ? SKILLS : UNLOCKS;
+    list.forEach(u => {
+      const owned = isUnlocked(u.id);
+      const locked = !owned && u.requires && !isUnlocked(u.requires);
+      const item = document.createElement('div'); item.className = 'item';
+      const h3 = document.createElement('h3'); h3.textContent = u.name;
+      const p = document.createElement('p'); p.textContent = u.desc;
+      item.appendChild(h3); item.appendChild(p);
+      if (locked){
+        const reqName = (SKILLS.find(x => x.id === u.requires) || {}).name || 'a prior skill';
+        const req = document.createElement('p'); req.className = 'reqline'; req.textContent = 'Requires: ' + reqName;
+        item.appendChild(req);
+      }
+      const row = document.createElement('div'); row.className = 'row2';
+      const cost = document.createElement('span'); cost.className = 'cost';
+      cost.textContent = owned ? (u.kind === 'skill' ? 'Learned' : 'Unlocked') : (u.cost + ' pts');
+      row.appendChild(cost);
+      if (!owned){
+        const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'buy';
+        btn.textContent = locked ? 'Locked' : 'Unlock';
+        btn.disabled = locked || pointsState.points < u.cost;
+        if (!locked) btn.addEventListener('click', () => buyEntry(u));
+        row.appendChild(btn);
+      } else if (u.kind === 'theme' || u.kind === 'skin'){
+        const val = u.id.split(':')[1];
+        const active = pointsState[u.kind] === val;
+        const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'use' + (active ? ' active' : '');
+        btn.textContent = active ? 'In use' : 'Use';
+        btn.addEventListener('click', () => setActive(u.kind, val));
+        row.appendChild(btn);
+      }
+      item.appendChild(row);
+      shopList.appendChild(item);
+    });
+  }
 
   function syncSlider(name, value){
     const s = sliders[name];
@@ -1357,6 +1560,7 @@
 
   scaleBtn.textContent = scaleNames[scaleIdx];
   keyBtn.textContent = 'Key ' + KEYS[keyIdx][0];
+  updatePointsUI();
   scaleBtn.addEventListener('click', () => {
     scaleIdx = (scaleIdx + 1) % scaleNames.length;
     scaleBtn.textContent = scaleNames[scaleIdx]; savePrefs();
@@ -1381,6 +1585,46 @@
     applyVolume();
   });
   clearBtn.addEventListener('click', () => { orgs.forEach(o => o.dying = true); });
+
+  // load your own sound
+  const sampleFile = $('sampleFile'), sampleBtn = $('sampleBtn'), sampleModeBtn = $('sampleModeBtn');
+  const SAMPLE_MODES = ['melody', 'drums', 'both', 'off'];
+  const SAMPLE_LABEL = {melody:'Melody', drums:'Drums', both:'Both', off:'Synth'};
+  function syncSampleUI(){
+    sampleModeBtn.textContent = 'Use: ' + SAMPLE_LABEL[sampleMode];
+    sampleModeBtn.classList.toggle('on', sampleMode !== 'off');
+  }
+  sampleBtn.addEventListener('click', () => sampleFile.click());
+  sampleModeBtn.addEventListener('click', () => {
+    sampleMode = SAMPLE_MODES[(SAMPLE_MODES.indexOf(sampleMode) + 1) % SAMPLE_MODES.length];
+    syncSampleUI();
+  });
+  sampleFile.addEventListener('change', async () => {
+    const f = sampleFile.files && sampleFile.files[0];
+    sampleFile.value = '';
+    if (!f) return;
+    if (f.size > 25e6){ showHint('That file is too large. Try one under 25 MB.', 4500); return; }
+    initAudio(); if (AC.state === 'suspended') AC.resume();
+    try {
+      const ab = await f.arrayBuffer();
+      const buf = await new Promise((res, rej) => AC.decodeAudioData(ab, res, rej));
+      let peak = 0;
+      for (let c = 0; c < buf.numberOfChannels; c++){
+        const d = buf.getChannelData(c);
+        for (let i = 0; i < d.length; i++){ const a = d[i] < 0 ? -d[i] : d[i]; if (a > peak) peak = a; }
+      }
+      if (peak < 1e-4) throw new Error('silent');
+      sampleNorm = Math.min(4, 1 / peak);
+      sampleRoot = detectRoot(buf);
+      sampleBuf = buf;
+      if (sampleMode === 'off') sampleMode = 'melody';
+      sampleModeBtn.hidden = false; sampleBtn.textContent = 'Change sound';
+      syncSampleUI(); placePanel();
+      showHint(f.name.replace(/\.[^.]+$/, '').slice(0, 24) + ' loaded. Tuned to ' + noteName(sampleRoot) + '.', 5000);
+    } catch(err){
+      showHint('Could not read that audio file.', 4500);
+    }
+  });
 
   // record the mix to an audio file
   let rec = null, recChunks = [];
@@ -1411,13 +1655,16 @@
 
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && AC && AC.state === 'suspended') AC.resume();
+    if (document.hidden) savePoints();
   });
+  window.addEventListener('pagehide', savePoints);
+  setInterval(savePoints, 10000);
 
   $('begin').addEventListener('click', () => {
     initAudio();
     if (AC.state === 'suspended') AC.resume();
     $('overlay').style.display = 'none';
-    showHint('Draw a line and listen to it.');
+    showHint(offlineGreeting || 'Draw a line and listen to it.');
   });
 
   /* ---------- install as an app ---------- */
