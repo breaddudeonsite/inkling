@@ -91,7 +91,7 @@
   #shop.open{display:block}
   #shop h2{font-family:var(--serif);font-style:italic;font-weight:600;font-size:19px;margin:0 0 10px;color:var(--mist)}
   #shop .tabs{display:flex;gap:8px;margin-bottom:12px}
-  #shop .tab{flex:1;text-align:center;font:600 13px var(--sans);padding:8px;border-radius:999px;
+  #shop .tab{flex:1;text-align:center;font:600 12px var(--sans);padding:8px 4px;border-radius:999px;
     border:1px solid rgba(201,198,242,.22);background:transparent;color:var(--dim);cursor:pointer;touch-action:manipulation}
   #shop .tab.on{background:rgba(143,227,255,.14);border-color:var(--glow);color:var(--mist)}
   #shop .bal{font-size:13px;color:var(--glow);margin-bottom:12px}
@@ -171,7 +171,9 @@
   <h2>Progress</h2>
   <div class="tabs">
     <button class="tab on" id="tabUnlocks" type="button">Unlocks</button>
+    <button class="tab" id="tabVoices" type="button">Voices</button>
     <button class="tab" id="tabSkills" type="button">Skills</button>
+    <button class="tab" id="tabGoals" type="button">Goals</button>
   </div>
   <div class="bal" id="shopBal"></div>
   <div id="shopList"></div>
@@ -228,13 +230,21 @@
     default: {name:'Ink theme (default)',    abyss:'#0b0d1e', deep:'#151837', mist:'#c9c6f2', dim:'#7f7cad', glow:'#8fe3ff', ember:'#ffb15c'},
     ember:   {name:'Ember theme',            abyss:'#1a0d0b', deep:'#3a1815', mist:'#f2d9c6', dim:'#ad8a7c', glow:'#ffb15c', ember:'#ff6b4a'},
     deepsea: {name:'Deep Sea theme',         abyss:'#050b14', deep:'#0d2438', mist:'#c6e8f2', dim:'#6f9aad', glow:'#5ce3ff', ember:'#b98fff'},
-    aurora:  {name:'Aurora theme',           abyss:'#08140d', deep:'#123322', mist:'#d3f2c6', dim:'#7fad86', glow:'#8fffb1', ember:'#ff8fd0'}
+    aurora:  {name:'Aurora theme',           abyss:'#08140d', deep:'#123322', mist:'#d3f2c6', dim:'#7fad86', glow:'#8fffb1', ember:'#ff8fd0'},
+    sakura:  {name:'Sakura theme',           abyss:'#1a0b14', deep:'#3a1530', mist:'#f7d6e8', dim:'#b07a99', glow:'#ff9fd0', ember:'#ffd08f'},
+    solar:   {name:'Solar theme',            abyss:'#140f04', deep:'#33260a', mist:'#f5e6b8', dim:'#a8935a', glow:'#ffd84a', ember:'#ff8a3d'},
+    vapor:   {name:'Vapor theme',            abyss:'#0f0a1f', deep:'#2a1450', mist:'#e4d0ff', dim:'#8f78b8', glow:'#4dfff0', ember:'#ff6bd6'},
+    noir:    {name:'Noir theme',             abyss:'#08080a', deep:'#1a1a1f', mist:'#e6e6ea', dim:'#85858f', glow:'#ffffff', ember:'#b8b8c4'}
   };
   const SKIN_DEFS = {
     default: {name:'Prism creatures (default)', shift:0},
     neon:    {name:'Neon creatures',             shift:140},
     sunset:  {name:'Sunset creatures',           shift:20},
-    violet:  {name:'Violet creatures',           shift:260}
+    violet:  {name:'Violet creatures',           shift:260},
+    gold:    {name:'Gold creatures',             shift:45},
+    toxic:   {name:'Toxic creatures',            shift:95},
+    ice:     {name:'Ice creatures',              shift:185},
+    ruby:    {name:'Ruby creatures',             shift:330}
   };
   const UNLOCKS = [
     {id:'theme:default',        kind:'theme', name:THEME_DEFS.default.name, cost:0,  desc:'The original palette.'},
@@ -248,7 +258,21 @@
     {id:'theme:aurora',         kind:'theme', name:THEME_DEFS.aurora.name,  cost:45, desc:'Green and pink northern lights.'},
     {id:'skin:neon',            kind:'skin',  name:SKIN_DEFS.neon.name,     cost:35, desc:'Electric, hue-shifted creatures.'},
     {id:'skin:sunset',          kind:'skin',  name:SKIN_DEFS.sunset.name,   cost:35, desc:'Warm-shifted creature colours.'},
-    {id:'skin:violet',          kind:'skin',  name:SKIN_DEFS.violet.name,   cost:50, desc:'Cool violet-shifted creatures.'}
+    {id:'skin:violet',          kind:'skin',  name:SKIN_DEFS.violet.name,   cost:50, desc:'Cool violet-shifted creatures.'},
+    {id:'scale:Locrian',        kind:'scale', name:'Locrian scale',          cost:90,  desc:'Unstable and unsettled. Never quite resolves.'},
+    {id:'scale:Neapolitan minor',kind:'scale',name:'Neapolitan minor scale', cost:120, desc:'Dark and classical, with a lowered second.'},
+    {id:'scale:Double harmonic',kind:'scale', name:'Double harmonic scale',  cost:150, desc:'Byzantine and dramatic, two augmented seconds.'},
+    {id:'scale:Persian',        kind:'scale', name:'Persian scale',          cost:190, desc:'Tense, ornate, full of half steps.'},
+    {id:'scale:Octatonic',      kind:'scale', name:'Octatonic scale',        cost:240, desc:'Symmetrical half-whole. Restless and cinematic.'},
+    {id:'scale:Enigmatic',      kind:'scale', name:'Enigmatic scale',        cost:300, desc:'Verdi called it enigmatic. It still is.'},
+    {id:'theme:sakura',         kind:'theme', name:THEME_DEFS.sakura.name,   cost:110, desc:'Blossom pinks over dusk plum.'},
+    {id:'theme:solar',          kind:'theme', name:THEME_DEFS.solar.name,    cost:130, desc:'Molten gold on a burnt umber sky.'},
+    {id:'theme:vapor',          kind:'theme', name:THEME_DEFS.vapor.name,    cost:170, desc:'Neon cyan and pink over deep purple.'},
+    {id:'theme:noir',           kind:'theme', name:THEME_DEFS.noir.name,     cost:220, desc:'Black and white. Only the sound has colour.'},
+    {id:'skin:gold',            kind:'skin',  name:SKIN_DEFS.gold.name,      cost:100, desc:'Creatures shimmer in warm golds.'},
+    {id:'skin:toxic',           kind:'skin',  name:SKIN_DEFS.toxic.name,     cost:100, desc:'Acid greens and yellows.'},
+    {id:'skin:ice',             kind:'skin',  name:SKIN_DEFS.ice.name,       cost:120, desc:'Frozen blues and teals.'},
+    {id:'skin:ruby',            kind:'skin',  name:SKIN_DEFS.ruby.name,      cost:150, desc:'Deep reds and magentas.'}
   ];
   // a small skill tree: idle income and creature income both branch to 2-3 tiers,
   // plus a few standalone gameplay perks. effect keys are summed into skillStats.
@@ -261,7 +285,59 @@
     {id:'skill:ink1',     kind:'skill', name:'Generous Ink',   cost:45,  requires:null,           effect:{spawnBonus:1},  desc:'Every new creature you draw is worth one extra point.'},
     {id:'skill:menagerie',kind:'skill', name:'Bigger Menagerie',cost:70, requires:null,           effect:{maxOrgs:4},     desc:'Keep 4 more creatures alive on screen at once.'},
     {id:'skill:breath',   kind:'skill', name:'Longer Breath',  cost:70,  requires:null,           effect:{droneCap:2},    desc:'Keep 2 more drones breathing at once.'},
-    {id:'skill:voices',   kind:'skill', name:'Extra Voices',   cost:85,  requires:null,           effect:{voiceCap:14},   desc:'More notes can sound at once without cutting out.'}
+    {id:'skill:voices',   kind:'skill', name:'Extra Voices',   cost:85,  requires:null,           effect:{voiceCap:14},   desc:'More notes can sound at once without cutting out.'},
+    {id:'skill:idle4',    kind:'skill', name:'Lullaby',        cost:400,  requires:'skill:idle3', effect:{idleRate:2.5},  desc:'A slow, endless lullaby. Much more idle income.'},
+    {id:'skill:idle5',    kind:'skill', name:'Aurora Hum',     cost:1200, requires:'skill:idle4', effect:{idleRate:6},    desc:'The whole sky hums along, even while you are away.'},
+    {id:'skill:idle6',    kind:'skill', name:'Endless Night',  cost:3500, requires:'skill:idle5', effect:{idleRate:15},   desc:'The music never stops, and neither does the income.'},
+    {id:'skill:chorus3',  kind:'skill', name:'Symphony',       cost:250,  requires:'skill:chorus2',effect:{creatureMult:1.5}, desc:'Creatures on screen earn another +150%.'},
+    {id:'skill:chorus4',  kind:'skill', name:'Orchestra',      cost:800,  requires:'skill:chorus3',effect:{creatureMult:2.5}, desc:'Creatures on screen earn another +250%.'},
+    {id:'skill:chorus5',  kind:'skill', name:'Cosmos',         cost:2500, requires:'skill:chorus4',effect:{creatureMult:4},   desc:'Creatures on screen earn another +400%.'},
+    {id:'skill:ink2',     kind:'skill', name:'Lavish Ink',     cost:150,  requires:'skill:ink1',  effect:{spawnBonus:2},  desc:'Every new creature is worth two more points.'},
+    {id:'skill:ink3',     kind:'skill', name:'Ink Well',       cost:600,  requires:'skill:ink2',  effect:{spawnBonus:5},  desc:'Every new creature is worth five more points.'},
+    {id:'skill:menagerie2',kind:'skill',name:'Zoo',            cost:220,  requires:'skill:menagerie',effect:{maxOrgs:4},  desc:'Keep 4 more creatures alive at once.'},
+    {id:'skill:menagerie3',kind:'skill',name:'Ark',            cost:700,  requires:'skill:menagerie2',effect:{maxOrgs:6}, desc:'Keep 6 more creatures alive at once.'},
+    {id:'skill:breath2',  kind:'skill', name:'Deeper Breath',  cost:300,  requires:'skill:breath',effect:{droneCap:3},    desc:'Keep 3 more drones breathing at once.'},
+    {id:'skill:voices2',  kind:'skill', name:'Many Voices',    cost:300,  requires:'skill:voices',effect:{voiceCap:20},   desc:'Even more notes can sound at once.'}
+  ];
+  // instruments for lead notes, arps and chords
+  const VOICES = [
+    {id:'inst:default', kind:'inst', name:'Synth (default)', cost:0,   desc:'Glassy, warm and bright, chosen by pen tilt.'},
+    {id:'inst:bell',    kind:'inst', name:'Bells',           cost:120, desc:'Inharmonic, shimmering bell tones.'},
+    {id:'inst:organ',   kind:'inst', name:'Organ',           cost:160, desc:'Stacked harmonics, steady and church-like.'},
+    {id:'inst:chip',    kind:'inst', name:'Chiptune',        cost:200, desc:'Square-wave beeps from an old console.'},
+    {id:'inst:pad',     kind:'inst', name:'Warm pad',        cost:260, desc:'Slow-blooming detuned strings.'},
+    {id:'inst:kalimba', kind:'inst', name:'Kalimba',         cost:320, desc:'Soft, plucky thumb-piano notes.'}
+  ];
+  function cleanStats(s){
+    s = (s && typeof s === 'object') ? s : {};
+    const n = k => (typeof s[k] === 'number' && isFinite(s[k]) && s[k] >= 0) ? s[k] : 0;
+    const o = k => (s[k] && typeof s[k] === 'object' && !Array.isArray(s[k])) ? s[k] : {};
+    return {spawns:n('spawns'), drums:n('drums'), maxAlive:n('maxAlive'), playSec:n('playSec'), records:n('records'),
+            samples:n('samples'), types:o('types'), scales:o('scales'), keys:o('keys'), flags:o('flags')};
+  }
+  const fmtMin = v => Math.floor(v / 60) + ' min';
+  const GOALS = [
+    {id:'g:first',   name:'First breath',      desc:'Draw your first creature.',                    target:1,    reward:10,   get:s => s.spawns},
+    {id:'g:draw25',  name:'Doodler',           desc:'Draw 25 creatures.',                           target:25,   reward:40,   get:s => s.spawns},
+    {id:'g:draw100', name:'Prolific',          desc:'Draw 100 creatures.',                          target:100,  reward:150,  get:s => s.spawns},
+    {id:'g:draw500', name:'Living ink',        desc:'Draw 500 creatures.',                          target:500,  reward:700,  get:s => s.spawns},
+    {id:'g:orch',    name:'Whole orchestra',   desc:'Draw every kind: lead, drone, bass, sweep, arp and drum.', target:6, reward:120, get:s => Object.keys(s.types).length},
+    {id:'g:drum20',  name:'Drummer',           desc:'Draw 20 drum creatures.',                      target:20,   reward:80,   get:s => s.drums},
+    {id:'g:full12',  name:'Full house',        desc:'Have 12 creatures alive at once.',             target:12,   reward:60,   get:s => s.maxAlive},
+    {id:'g:full20',  name:'Stampede',          desc:'Have 20 creatures alive at once.',             target:20,   reward:250,  get:s => s.maxAlive},
+    {id:'g:scale6',  name:'Scale explorer',    desc:'Try 6 different scales.',                      target:6,    reward:80,   get:s => Object.keys(s.scales).length},
+    {id:'g:scale12', name:'Scale scholar',     desc:'Try 12 different scales.',                     target:12,   reward:300,  get:s => Object.keys(s.scales).length},
+    {id:'g:keys',    name:'Circle of fifths',  desc:'Play in all 12 keys.',                         target:12,   reward:120,  get:s => Object.keys(s.keys).length},
+    {id:'g:tempo',   name:'Tempo extremes',    desc:'Go as slow as 45 BPM and as fast as 130.',     target:2,    reward:70,   get:s => (s.flags.slow ? 1 : 0) + (s.flags.fast ? 1 : 0)},
+    {id:'g:swing',   name:'Shuffle',           desc:'Push swing to 60% or more.',                   target:1,    reward:40,   get:s => s.flags.swing ? 1 : 0},
+    {id:'g:drench',  name:'Drenched',          desc:'Push space to 90% or more.',                   target:1,    reward:40,   get:s => s.flags.drench ? 1 : 0},
+    {id:'g:rec1',    name:'On the record',     desc:'Record and save a take.',                      target:1,    reward:60,   get:s => s.records},
+    {id:'g:rec5',    name:'Recording artist',  desc:'Save 5 takes.',                                target:5,    reward:250,  get:s => s.records},
+    {id:'g:samp1',   name:'Bring your own',    desc:'Load a sound of your own.',                    target:1,    reward:50,   get:s => s.samples},
+    {id:'g:samp5',   name:'Crate digger',      desc:'Load 5 sounds.',                               target:5,    reward:150,  get:s => s.samples},
+    {id:'g:time10',  name:'Settle in',         desc:'Play for 10 minutes.',                         target:600,  reward:150,  get:s => s.playSec, fmt:fmtMin},
+    {id:'g:time60',  name:'Marathon',          desc:'Play for an hour in total.',                   target:3600, reward:900,  get:s => s.playSec, fmt:fmtMin},
+    {id:'g:time300', name:'Devoted',           desc:'Play for five hours in total.',                target:18000,reward:4000, get:s => s.playSec, fmt:fmtMin}
   ];
   const PKEY = 'inkling.points.v1';
   function loadPoints(){
@@ -272,13 +348,19 @@
         unlocked: Array.isArray(p.unlocked) ? p.unlocked.filter(x => typeof x === 'string') : [],
         theme: typeof p.theme === 'string' ? p.theme : 'default',
         skin: typeof p.skin === 'string' ? p.skin : 'default',
+        inst: typeof p.inst === 'string' ? p.inst : 'default',
+        claimed: Array.isArray(p.claimed) ? p.claimed.filter(x => typeof x === 'string') : [],
+        stats: cleanStats(p.stats),
         lastSeen: (typeof p.lastSeen === 'number' && isFinite(p.lastSeen)) ? p.lastSeen : 0
       };
-    } catch(e){ return {points:0, unlocked:[], theme:'default', skin:'default', lastSeen:0}; }
+    } catch(e){ return {points:0, unlocked:[], theme:'default', skin:'default', inst:'default', claimed:[], stats:cleanStats(), lastSeen:0}; }
   }
   const pointsState = loadPoints();
   function savePoints(){ pointsState.lastSeen = Date.now(); try { localStorage.setItem(PKEY, JSON.stringify(pointsState)); } catch(e){} }
-  function isUnlocked(id){ return id === 'theme:default' || id === 'skin:default' || pointsState.unlocked.indexOf(id) !== -1; }
+  function isUnlocked(id){ return id === 'theme:default' || id === 'skin:default' || id === 'inst:default' || pointsState.unlocked.indexOf(id) !== -1; }
+  const curInst = () => (pointsState.inst && isUnlocked('inst:' + pointsState.inst)) ? pointsState.inst : 'default';
+  const goalClaimed = g => pointsState.claimed.indexOf(g.id) !== -1;
+  const goalsReady = () => GOALS.filter(g => !goalClaimed(g) && g.get(pointsState.stats) >= g.target);
   let skillStats = {idleRate:0, creatureMult:0, spawnBonus:0, maxOrgs:0, droneCap:0, voiceCap:0};
   function computeSkillStats(){
     const s = {idleRate:0, creatureMult:0, spawnBonus:0, maxOrgs:0, droneCap:0, voiceCap:0};
@@ -326,7 +408,13 @@
     'Mixolydian':     [0,2,4,5,7,9,10],
     'Phrygian':       [0,1,3,5,7,8,10],
     'Harmonic minor': [0,2,3,5,7,8,11],
-    'Chromatic':      [0,1,2,3,4,5,6,7,8,9,10,11]
+    'Chromatic':      [0,1,2,3,4,5,6,7,8,9,10,11],
+    'Locrian':        [0,1,3,5,6,8,10],
+    'Neapolitan minor':[0,1,3,5,7,8,11],
+    'Double harmonic':[0,1,4,5,7,8,11],
+    'Persian':        [0,1,4,5,6,8,11],
+    'Octatonic':      [0,2,3,5,6,8,9,11],
+    'Enigmatic':      [0,1,4,6,8,10,11]
   };
   const SCALES = Object.assign({}, BASE_SCALES, LOCKED_SCALES);
   let scaleNames = [];
@@ -484,10 +572,10 @@
   /* ---------- user-loaded sound ---------- */
   let sampleBuf = null, sampleRoot = 60, sampleNorm = 1, sampleMode = 'melody';   // mode: melody | drums | both | off
   const sampleFor = kind => !!sampleBuf && (sampleMode === 'both' || sampleMode === kind);
-  function samplePlay(rate, vel, pan, dur, at, d, r, level){
+  function samplePlay(rate, vel, pan, dur, at, d, r, level, minLen = 0){
     rate = clamp(rate, 0.1, 8);
     const t = Math.max(AC.currentTime, at || 0);
-    const len = Math.max(0.05, Math.min(dur, sampleBuf.duration / rate));
+    const len = Math.max(0.05, Math.min(Math.max(dur, minLen), sampleBuf.duration / rate));
     const src = AC.createBufferSource(); src.buffer = sampleBuf; src.playbackRate.value = rate;
     const amp = AC.createGain(), p = panner(pan), g = Math.max(0.001, vel * level * sampleNorm);
     amp.gain.setValueAtTime(0.0001, t);
@@ -499,6 +587,28 @@
     src.start(t); src.stop(t + len + 0.02);
     voices++;
     src.onended = () => { voices--; release(nodes); };
+  }
+  // drop leading silence and keep the loudest stretch (max 4 s) so short notes hit the meat of the sound
+  function prepSample(buf){
+    const sr = buf.sampleRate, nc = buf.numberOfChannels, n = buf.length;
+    const chs = []; for (let c = 0; c < nc; c++) chs.push(buf.getChannelData(c));
+    const amp = i => { let m = 0; for (let c = 0; c < nc; c++){ const a = Math.abs(chs[c][i]); if (a > m) m = a; } return m; };
+    let peak = 0; for (let i = 0; i < n; i += 8){ const a = amp(i); if (a > peak) peak = a; }
+    if (peak < 1e-4) return null;
+    const maxLen = Math.floor(sr * 4);
+    let start = 0;
+    if (n > maxLen){
+      const hop = Math.floor(sr * 0.1); let bestE = -1;
+      for (let s = 0; s + maxLen <= n; s += hop){
+        let e = 0; for (let i = s; i < s + maxLen; i += 64) e += amp(i);
+        if (e > bestE){ bestE = e; start = s; }
+      }
+    }
+    const end = Math.min(n, start + maxLen), thr = peak * 0.05;
+    for (let i = start; i < end; i++){ if (amp(i) > thr){ start = Math.max(start, i - Math.floor(sr * 0.003)); break; } }
+    const out = AC.createBuffer(nc, end - start, sr);
+    for (let c = 0; c < nc; c++) out.getChannelData(c).set(chs[c].subarray(start, end));
+    return {buf: out, peak};
   }
   // rough pitch estimate (autocorrelation on the loudest stretch) so melodies play in tune; falls back to C4
   function detectRoot(buf){
@@ -526,11 +636,12 @@
 
   function pluck({midi, vel, tilt = 0.3, pan = 0, dur = 0.9, at = 0}){
     if (!AC || muted || voices >= VOICE_CAP + skillStats.voiceCap) return;
-    if (sampleFor('melody')) return samplePlay(Math.pow(2, (midi - sampleRoot) / 12), vel, pan, dur, at, 0.42, 0.5, 0.5);
+    if (sampleFor('melody')) return samplePlay(Math.pow(2, (midi - sampleRoot) / 12), vel, pan, dur, at, 0.42, 0.5, 0.5, 0.45);
     const t = Math.max(AC.currentTime, at), f = mtof(midi), end = t + dur + 0.08;
+    const inst = curInst(), atk = inst === 'pad' ? 0.12 : 0.006;
     const amp = AC.createGain();
     amp.gain.setValueAtTime(0.0001, t);
-    amp.gain.linearRampToValueAtTime(Math.max(0.001, vel * 0.3), t + 0.006);
+    amp.gain.linearRampToValueAtTime(Math.max(0.001, vel * 0.3), t + atk);
     amp.gain.exponentialRampToValueAtTime(0.0008, t + dur);
     const filt = AC.createBiquadFilter(); filt.type = 'lowpass';
     const cutoff = Math.min(12000, 500 + f * 2 + tilt * 4200 + vel * 1800);   // brighter up high, so high notes are not dull
@@ -547,7 +658,17 @@
       o.connect(g); g.connect(filt); nodes.push(g);
       o.start(t); o.stop(end); oscs.push(o);
     };
-    if (tilt < 0.33){            // glassy: sine with a soft second and third partial
+    if (inst === 'bell'){
+      add('sine', f, 0, 1); add('sine', f * 2.76, 0, 0.35); add('sine', f * 5.4, 0, 0.14);
+    } else if (inst === 'organ'){
+      add('sine', f, 0, 0.8); add('sine', f * 2, 0, 0.5); add('sine', f * 3, 0, 0.3); add('sine', f * 4, 0, 0.15);
+    } else if (inst === 'chip'){
+      add('square', f, 0, 0.45); add('square', f * 2, 8, 0.12);
+    } else if (inst === 'pad'){
+      add('sawtooth', f, -9, 0.4); add('sawtooth', f, 9, 0.4); add('triangle', f / 2, 0, 0.4);
+    } else if (inst === 'kalimba'){
+      add('sine', f, 0, 1); add('sine', f * 4.02, 0, 0.22); add('triangle', f * 2, 3, 0.15);
+    } else if (tilt < 0.33){            // glassy: sine with a soft second and third partial
       add('sine', f, 0, 1); add('sine', f * 2, 0, 0.3); add('sine', f * 3, 0, 0.08);
     } else if (tilt < 0.66){     // warm: two slightly detuned triangles
       add('triangle', f, -5, 0.65); add('triangle', f, 5, 0.65);
@@ -562,7 +683,7 @@
   // narrower stereo image and a drier send so the low end stays tight instead of smearing in the verb
   function bass({midi, vel, tilt = 0.3, pan = 0, dur = 1.6, at = 0}){
     if (!AC || muted || voices >= VOICE_CAP + skillStats.voiceCap) return;
-    if (sampleFor('melody')) return samplePlay(Math.pow(2, (midi - sampleRoot) / 12), vel, pan * 0.45, dur, at, 0.1, 0.16, 0.6);
+    if (sampleFor('melody')) return samplePlay(Math.pow(2, (midi - sampleRoot) / 12), vel, pan * 0.45, dur, at, 0.1, 0.16, 0.6, 0.6);
     const t = Math.max(AC.currentTime, at), f = mtof(midi), end = t + dur + 0.12;
     const amp = AC.createGain();
     amp.gain.setValueAtTime(0.0001, t);
@@ -659,7 +780,7 @@
   // continuous voice while the pen is drawing
   let live = null;
   function liveStart(){
-    if (!AC || muted || live) return;
+    if (!AC || muted || live || sampleFor('melody')) return;
     const o1 = AC.createOscillator(), o2 = AC.createOscillator();
     o1.type = 'sawtooth'; o2.type = 'sine';
     const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 4; f.frequency.value = 800;
@@ -831,6 +952,11 @@
         stroke.tickX = x; stroke.tickY = y;
         drum({midi, vel: 0.3 + p * 0.7, pan: (x / W) * 2 - 1, kind: drumKind(y)});
         ripples.push({x, y, r: 4, life: 1, hue: hueOf(y, true)});
+      }
+    } else if (sampleFor('melody')){
+      if (Math.hypot(x - stroke.tickX, y - stroke.tickY) > 34){
+        stroke.tickX = x; stroke.tickY = y;
+        pluck({midi, vel: 0.3 + p * 0.7, tilt: tl, pan: (x / W) * 2 - 1, dur: 0.6});
       }
     } else {
       liveUpdate(midi, p, tl, x);
@@ -1009,6 +1135,12 @@
     if (drones.length > 4 + skillStats.droneCap) drones[0].dying = true;
 
     spawnCount++;
+    {
+      const S = pointsState.stats;
+      S.spawns++; S.types[o.perc ? 'perc' : (o.drone ? 'drone' : o.type)] = 1;
+      if (o.perc) S.drums++;
+      S.maxAlive = Math.max(S.maxAlive, Math.min(alive.length, MAX_ORGS + skillStats.maxOrgs));
+    }
     let ptGain = 2 + (skillStats.spawnBonus || 0);
     if (o.type === 'drone' || o.type === 'sweep' || o.type === 'bass' || o.type === 'arp') ptGain += 1;
     earnPoints(ptGain);
@@ -1409,8 +1541,9 @@
     for (const o of orgs) if (!o.dying) creatureRate += (CREATURE_RATE[o.type] || 0.02);
     const rate = skillStats.idleRate + creatureRate * (1 + skillStats.creatureMult);
     if (rate > 0) pointsState.points += rate * dt;
+    if (AC && !document.hidden) pointsState.stats.playSec += dt;
     uiAccum += dt;
-    if (uiAccum >= 0.5){ uiAccum = 0; updatePointsUI(); savePoints(); }
+    if (uiAccum >= 0.5){ uiAccum = 0; updatePointsUI(); savePoints(); if (AC) checkGoals(); }
     const gp = AC ? gridPos() : t / STEP;
     ctx.globalCompositeOperation = 'source-over';
     ctx.clearRect(0, 0, W, H);
@@ -1454,7 +1587,7 @@
 
   function updatePointsUI(){
     if (!pointsBtn) return;
-    pointsBtn.textContent = '✦ ' + Math.floor(pointsState.points);
+    pointsBtn.textContent = '✦ ' + Math.floor(pointsState.points) + (goalsReady().length ? ' •' : '');
   }
   function flashPoints(){
     if (!pointsBtn) return;
@@ -1465,14 +1598,53 @@
   function openShop(){ placePanel(); closePanel(); renderShop(); shop.classList.add('open'); pointsBtn.setAttribute('aria-expanded', 'true'); pointsBtn.classList.add('on'); }
   function closeShop(){ if (!shop) return; shop.classList.remove('open'); pointsBtn.setAttribute('aria-expanded', 'false'); pointsBtn.classList.remove('on'); }
   pointsBtn.addEventListener('click', () => shop.classList.contains('open') ? closeShop() : openShop());
+  const tabBtns = {unlocks: tabUnlocksBtn, voices: $('tabVoices'), skills: tabSkillsBtn, goals: $('tabGoals')};
   function setShopTab(tab){
     shopTab = tab;
-    tabUnlocksBtn.classList.toggle('on', tab === 'unlocks');
-    tabSkillsBtn.classList.toggle('on', tab === 'skills');
+    for (const k in tabBtns) tabBtns[k].classList.toggle('on', k === tab);
     renderShop();
   }
-  tabUnlocksBtn.addEventListener('click', () => setShopTab('unlocks'));
-  tabSkillsBtn.addEventListener('click', () => setShopTab('skills'));
+  for (const k in tabBtns) tabBtns[k].addEventListener('click', () => setShopTab(k));
+
+  const notified = new Set();
+  function checkGoals(){
+    goalsReady().forEach(g => {
+      if (notified.has(g.id)) return;
+      notified.add(g.id);
+      showHint('Goal reached: ' + g.name + '. Claim it under ✦ Goals.', 5000);
+    });
+  }
+  function claimGoal(g){
+    if (goalClaimed(g) || g.get(pointsState.stats) < g.target) return;
+    pointsState.claimed.push(g.id);
+    pointsState.points += g.reward;
+    savePoints(); updatePointsUI(); flashPoints(); renderShop();
+    showHint(g.name + ' complete: +' + g.reward + ' points.', 4000);
+  }
+  function renderGoals(){
+    const S = pointsState.stats;
+    GOALS.slice().sort((a, b) => (goalClaimed(a) ? 1 : 0) - (goalClaimed(b) ? 1 : 0)).forEach(g => {
+      const done = goalClaimed(g);
+      const raw = g.get(S), val = Math.min(g.target, raw), ready = !done && raw >= g.target;
+      const fmt = g.fmt || (v => Math.floor(v));
+      const item = document.createElement('div'); item.className = 'item';
+      const h3 = document.createElement('h3'); h3.textContent = g.name;
+      const p = document.createElement('p'); p.textContent = g.desc;
+      item.appendChild(h3); item.appendChild(p);
+      const row = document.createElement('div'); row.className = 'row2';
+      const cost = document.createElement('span'); cost.className = 'cost';
+      cost.textContent = done ? 'Claimed' : fmt(val) + ' / ' + fmt(g.target) + '  •  +' + g.reward + ' pts';
+      row.appendChild(cost);
+      if (!done){
+        const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'buy';
+        btn.textContent = 'Claim'; btn.disabled = !ready;
+        btn.addEventListener('click', () => claimGoal(g));
+        row.appendChild(btn);
+      }
+      item.appendChild(row);
+      shopList.appendChild(item);
+    });
+  }
 
   function buyEntry(u){
     if (isUnlocked(u.id) || pointsState.points < u.cost) return;
@@ -1489,6 +1661,7 @@
   function setActive(kind, val){
     if (kind === 'theme'){ pointsState.theme = val; applyTheme(val); }
     else if (kind === 'skin'){ pointsState.skin = val; skinShift = (SKIN_DEFS[val] || SKIN_DEFS.default).shift; }
+    else if (kind === 'inst'){ pointsState.inst = val; }
     savePoints();
     renderShop();
   }
@@ -1497,7 +1670,8 @@
     const idleTxt = skillStats.idleRate > 0 ? (' • idle income ' + skillStats.idleRate.toFixed(2) + ' pts/sec, always') : '';
     shopBal.textContent = Math.floor(pointsState.points) + ' points' + idleTxt;
     shopList.innerHTML = '';
-    const list = shopTab === 'skills' ? SKILLS : UNLOCKS;
+    if (shopTab === 'goals'){ renderGoals(); return; }
+    const list = shopTab === 'skills' ? SKILLS : shopTab === 'voices' ? VOICES : UNLOCKS;
     list.forEach(u => {
       const owned = isUnlocked(u.id);
       const locked = !owned && u.requires && !isUnlocked(u.requires);
@@ -1520,7 +1694,7 @@
         btn.disabled = locked || pointsState.points < u.cost;
         if (!locked) btn.addEventListener('click', () => buyEntry(u));
         row.appendChild(btn);
-      } else if (u.kind === 'theme' || u.kind === 'skin'){
+      } else if (u.kind === 'theme' || u.kind === 'skin' || u.kind === 'inst'){
         const val = u.id.split(':')[1];
         const active = pointsState[u.kind] === val;
         const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'use' + (active ? ' active' : '');
@@ -1544,14 +1718,18 @@
   sliders.bpm.el.addEventListener('input', () => {
     const v = +sliders.bpm.el.value; sliders.bpm.out.textContent = sliders.bpm.fmt(v);
     setBpm(v); savePrefs();
+    if (v <= 45) pointsState.stats.flags.slow = 1;
+    if (v >= 130) pointsState.stats.flags.fast = 1;
   });
   sliders.swing.el.addEventListener('input', () => {
     const v = +sliders.swing.el.value; sliders.swing.out.textContent = sliders.swing.fmt(v);
     swing = v / 100; savePrefs();
+    if (v >= 60) pointsState.stats.flags.swing = 1;
   });
   sliders.space.el.addEventListener('input', () => {
     const v = +sliders.space.el.value; sliders.space.out.textContent = sliders.space.fmt(v);
     space = v / 100; applySpace(); savePrefs();
+    if (v >= 90) pointsState.stats.flags.drench = 1;
   });
   sliders.vol.el.addEventListener('input', () => {
     const v = +sliders.vol.el.value; sliders.vol.out.textContent = sliders.vol.fmt(v);
@@ -1564,10 +1742,12 @@
   scaleBtn.addEventListener('click', () => {
     scaleIdx = (scaleIdx + 1) % scaleNames.length;
     scaleBtn.textContent = scaleNames[scaleIdx]; savePrefs();
+    pointsState.stats.scales[scaleNames[scaleIdx]] = 1;
   });
   keyBtn.addEventListener('click', () => {
     keyIdx = (keyIdx + 1) % KEYS.length; applyKey();
     keyBtn.textContent = 'Key ' + KEYS[keyIdx][0]; savePrefs();
+    pointsState.stats.keys[KEYS[keyIdx][0]] = 1;
   });
   percBtn.addEventListener('click', () => {
     percMode = !percMode;
@@ -1608,15 +1788,11 @@
     try {
       const ab = await f.arrayBuffer();
       const buf = await new Promise((res, rej) => AC.decodeAudioData(ab, res, rej));
-      let peak = 0;
-      for (let c = 0; c < buf.numberOfChannels; c++){
-        const d = buf.getChannelData(c);
-        for (let i = 0; i < d.length; i++){ const a = d[i] < 0 ? -d[i] : d[i]; if (a > peak) peak = a; }
-      }
-      if (peak < 1e-4) throw new Error('silent');
-      sampleNorm = Math.min(4, 1 / peak);
-      sampleRoot = detectRoot(buf);
-      sampleBuf = buf;
+      const prep = prepSample(buf);
+      if (!prep) throw new Error('silent');
+      sampleNorm = Math.min(4, 1 / prep.peak);
+      sampleRoot = detectRoot(prep.buf);
+      sampleBuf = prep.buf; pointsState.stats.samples++;
       if (sampleMode === 'off') sampleMode = 'melody';
       sampleModeBtn.hidden = false; sampleBtn.textContent = 'Change sound';
       syncSampleUI(); placePanel();
@@ -1648,6 +1824,7 @@
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
       rec = null; recBtn.textContent = 'Record'; recBtn.classList.remove('rec');
+      pointsState.stats.records++; savePoints();
     };
     r.start();
     recBtn.textContent = 'Stop and save'; recBtn.classList.add('rec');
