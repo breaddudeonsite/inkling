@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0b0d1e">
+<meta name="description" content="Draw with a pen and hear it. Your lines become living, singing creatures.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Inkling">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Inkling: draw sound, watch it live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@1,9..144,400;1,9..144,600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --abyss:#0b0d1e;
+    --deep:#151837;
+    --mist:#c9c6f2;
+    --dim:#7f7cad;
+    --glow:#8fe3ff;
+    --ember:#ffb15c;
+    --serif:"Fraunces", Georgia, "Times New Roman", serif;
+    --sans:system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{
+    margin:0;height:100%;overflow:hidden;overscroll-behavior:none;
+    background:radial-gradient(120% 90% at 50% 110%, var(--deep) 0%, var(--abyss) 60%);
+    color:var(--mist);font-family:var(--sans);
+    touch-action:none;user-select:none;-webkit-user-select:none;
+  }
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+
+  .bar{
+    position:fixed;top:10px;left:12px;right:12px;z-index:5;
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;pointer-events:none;
+  }
+  .bar > *{pointer-events:auto}
+  .title{
+    font-family:var(--serif);font-style:italic;font-weight:600;font-size:26px;
+    letter-spacing:.01em;color:var(--mist);margin-right:auto;padding:0 4px;
+    text-shadow:0 0 18px rgba(143,227,255,.35);
+  }
+  .pill{
+    font:500 14px var(--sans);color:var(--mist);
+    background:rgba(21,24,55,.72);border:1px solid rgba(201,198,242,.22);
+    border-radius:999px;padding:10px 16px;min-height:42px;cursor:pointer;
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    touch-action:manipulation;
+  }
+  .pill:focus-visible{outline:2px solid var(--glow);outline-offset:2px}
+  .pill.on{background:rgba(255,177,92,.18);border-color:var(--ember);color:#ffe3c2}
+  .pill.rec{background:rgba(255,92,92,.2);border-color:#ff6b6b;color:#ffd6d6}
+  .pill.off{color:var(--dim)}
+  .pill[hidden]{display:none}
+
+  #hint{
+    position:fixed;left:0;right:0;bottom:22px;z-index:4;text-align:center;
+    font-family:var(--serif);font-style:italic;font-size:19px;color:var(--mist);
+    opacity:0;transition:opacity .8s ease;pointer-events:none;padding:0 24px;
+    text-shadow:0 0 14px rgba(11,13,30,.9);
+  }
+  #hint.show{opacity:.9}
+
+  #panel{
+    position:fixed;right:12px;z-index:6;display:none;
+    width:min(300px, calc(100vw - 24px));padding:16px 18px 14px;
+    background:rgba(21,24,55,.88);border:1px solid rgba(201,198,242,.22);border-radius:20px;
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  }
+  #panel.open{display:block}
+  #panel label{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:14px;margin-bottom:10px}
+  #panel output{color:var(--glow);font-variant-numeric:tabular-nums}
+  #panel input[type=range]{grid-column:1 / -1;width:100%;height:30px;margin:0;accent-color:var(--glow);touch-action:manipulation}
+  #panel .row{display:flex;gap:8px;margin-top:4px}
+  #panel .row .pill{flex:1;text-align:center}
+
+  #overlay{
+    position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(90% 70% at 50% 40%, rgba(21,24,55,.92), rgba(11,13,30,.97));
+    padding:24px;overflow:auto;
+  }
+  #overlay .card{max-width:460px;text-align:left}
+  #overlay h1{
+    font-family:var(--serif);font-style:italic;font-weight:600;font-size:56px;margin:0 0 6px;
+    color:var(--mist);text-shadow:0 0 30px rgba(143,227,255,.45);line-height:1;
+  }
+  #overlay p.lead{font-family:var(--serif);font-style:italic;font-size:21px;margin:0 0 22px;color:var(--mist);line-height:1.35}
+  #overlay dl{margin:0 0 26px;display:grid;grid-template-columns:auto 1fr;gap:10px 16px;font-size:15px;line-height:1.4}
+  #overlay dt{color:var(--glow);font-weight:600}
+  #overlay dd{margin:0;color:var(--mist)}
+  #begin{font-size:17px;padding:14px 28px;background:rgba(143,227,255,.14);border-color:var(--glow);color:#eaffff}
+
+  @media (max-width:520px){
+    #overlay h1{font-size:44px}
+    .title{font-size:22px}
+  }
+  @media (prefers-reduced-motion:reduce){#hint{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="bar" id="bar">
+  <div class="title">Inkling</div>
+  <button class="pill" id="scaleBtn" type="button">Pentatonic</button>
+  <button class="pill" id="keyBtn" type="button">Key C</button>
+  <button class="pill" id="percBtn" type="button" aria-pressed="false">Percussion</button>
+  <button class="pill" id="undoBtn" type="button">Undo</button>
+  <button class="pill" id="clearBtn" type="button">Clear</button>
+  <button class="pill" id="muteBtn" type="button">Sound on</button>
+  <button class="pill" id="mixBtn" type="button" aria-expanded="false" aria-controls="panel">Mix</button>
+  <button class="pill" id="installBtn" type="button" hidden>Install</button>
+</div>
+
+<div id="panel" role="group" aria-label="Mix settings">
+  <label>Tempo <output id="bpmOut">72 BPM</output>
+    <input type="range" id="bpm" min="40" max="140" step="1" value="72"></label>
+  <label>Swing <output id="swingOut">0%</output>
+    <input type="range" id="swing" min="0" max="100" step="1" value="0"></label>
+  <label>Space <output id="spaceOut">45%</output>
+    <input type="range" id="space" min="0" max="100" step="1" value="45"></label>
+  <label>Volume <output id="volOut">75%</output>
+    <input type="range" id="vol" min="0" max="100" step="1" value="75"></label>
+  <div class="row"><button class="pill" id="recBtn" type="button">Record</button></div>
+</div>
+
+<div id="hint"></div>
+
+<div id="overlay">
+  <div class="card">
+    <h1>Inkling</h1>
+    <p class="lead">Draw a line and it sings. Lift the pen and it comes alive.</p>
+    <dl>
+      <dt>Draw</dt><dd>Height sets the pitch, pressure sets the volume.</dd>
+      <dt>Tilt</dt><dd>Lean the pen for a brighter, sharper tone.</dd>
+      <dt>Hover</dt><dd>Creatures swim toward your pen and wake up. Hold the pen button while hovering to scare them off.</dd>
+      <dt>Button</dt><dd>Hold the pen button while drawing for a drum creature. Low is kick, middle is snare, high is hat.</dd>
+      <dt>Shape</dt><dd>Tight curls play chords. Closed loops become drones. Creatures that touch answer each other.</dd>
+      <dt>Key</dt><dd>Pick a scale and key up top. Every creature stays in tune with it, and follows if you change it.</dd>
+    </dl>
+    <button class="pill" id="begin" type="button">Start drawing</button>
+  </div>
+</div>
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+  /* ---------- canvas ---------- */
+  const canvas = $('c');
+  const ctx = canvas.getContext('2d');
+  let W = 0, H = 0, DPR = 1;
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    placePanel();
+  }
+  window.addEventListener('resize', resize);
+
+  /* ---------- saved settings ---------- */
+  const KEY = 'inkling.v2';
+  function loadPrefs(){ try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch(e){ return {}; } }
+  function savePrefs(){
+    try { localStorage.setItem(KEY, JSON.stringify({scaleIdx, keyIdx, bpm, swing, space, vol})); } catch(e){}
+  }
+  const saved = loadPrefs();
+  const pick = (v, lo, hi, d) => (typeof v === 'number' && isFinite(v) && v >= lo && v <= hi) ? v : d;
+
+  /* ---------- music theory ---------- */
+  const SCALES = {
+    'Pentatonic': [0,2,4,7,9],
+    'Minor pent': [0,3,5,7,10],
+    'Dorian':     [0,2,3,5,7,9,10],
+    'Aeolian':    [0,2,3,5,7,8,10],
+    'Lydian':     [0,2,4,6,7,9,11],
+    'Hirajoshi':  [0,2,3,7,8],
+    'Whole tone': [0,2,4,6,8,10],
+    'Blues':      [0,3,5,6,7,10]
+  };
+  const scaleNames = Object.keys(SCALES);
+  // keys walk the circle of fifths so each tap lands somewhere closely related
+  const KEYS = [['C',0],['G',7],['D',2],['A',9],['E',4],['B',11],['F♯',6],['D♭',1],['A♭',8],['E♭',3],['B♭',10],['F',5]];
+  const NOTE_NAMES = ['C','D♭','D','E♭','E','F','F♯','G','A♭','A','B♭','B'];
+  let scaleIdx = pick(saved.scaleIdx, 0, scaleNames.length - 1, 0) | 0;
+  let keyIdx = pick(saved.keyIdx, 0, KEYS.length - 1, 0) | 0;
+  const OCT = 3;                 // octaves spanned by screen height
+  let baseMidi = 48;
+  function applyKey(){ const r = KEYS[keyIdx][1]; baseMidi = 48 + (r > 6 ? r - 12 : r); }
+  applyKey();
+
+  /* ---------- tempo grid ---------- */
+  let bpm = pick(saved.bpm, 40, 140, 72) | 0;
+  let STEP = 60 / bpm / 4;       // seconds per sixteenth note
+  let swing = pick(saved.swing, 0, 1, 0);
+  let space = pick(saved.space, 0, 1, 0.45);
+  let vol = pick(saved.vol, 0, 1, 0.75);
+  const LOOP_LENGTHS = [4, 6, 8, 12, 16, 24, 32];   // in steps: whole bars and triplet-friendly bars only
+
+  const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+  function degFromY(y){
+    const s = SCALES[scaleNames[scaleIdx]];
+    const n = s.length * OCT;
+    const t = 1 - Math.min(0.999, Math.max(0, y / H));
+    return Math.floor(t * n);
+  }
+  function noteFromDeg(d){
+    const s = SCALES[scaleNames[scaleIdx]];
+    const len = s.length;
+    const oct = Math.floor(d / len);
+    return baseMidi + oct * 12 + s[((d % len) + len) % len];
+  }
+  function noteFromY(y){ return noteFromDeg(degFromY(y)); }
+  function noteName(midi){ return NOTE_NAMES[((midi % 12) + 12) % 12]; }
+  function hueOf(y, perc){
+    const t = 1 - Math.min(1, Math.max(0, y / H));
+    return perc ? 22 + t * 34 : (200 + t * 200) % 360;
+  }
+  // drum voice by height: low = kick, middle = snare/tom, high = hat
+  function drumKind(y){
+    const t = 1 - Math.min(1, Math.max(0, y / H));
+    return t < 0.34 ? 0 : t < 0.67 ? 1 : 2;
+  }
+
+  /* ---------- audio ---------- */
+  let AC = null, master, comp, recDest = null;
+  let delayIn, delayWet, delayNodes = [], verbIn, verbWet, noiseBuf;
+  let muted = false, voices = 0;
+  const VOICE_CAP = 34;
+
+  function makeIR(){
+    const sr = AC.sampleRate, len = Math.floor(sr * 2.8);
+    const b = AC.createBuffer(2, len, sr);
+    for (let c = 0; c < 2; c++){
+      const d = b.getChannelData(c);
+      let lp = 0;
+      for (let i = 0; i < len; i++){
+        lp += ((Math.random() * 2 - 1) - lp) * 0.35;      // darken the tail
+        d[i] = lp * Math.pow(1 - i / len, 2.6);
+      }
+    }
+    return b;
+  }
+
+  function initAudio(){
+    if (AC) return;
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    comp = AC.createDynamicsCompressor();
+    comp.threshold.value = -18; comp.knee.value = 12; comp.ratio.value = 6;
+    comp.attack.value = 0.004; comp.release.value = 0.2;
+    master = AC.createGain(); master.gain.value = muted ? 0 : vol;
+    master.connect(comp); comp.connect(AC.destination);
+    if (AC.createMediaStreamDestination && window.MediaRecorder){
+      recDest = AC.createMediaStreamDestination();
+      comp.connect(recDest);
+    }
+
+    // ping-pong echo, a dotted eighth apart
+    delayIn = AC.createGain();
+    const dL = AC.createDelay(3), dR = AC.createDelay(3);
+    dL.delayTime.value = dR.delayTime.value = STEP * 3;
+    delayNodes = [dL, dR];
+    const lpL = AC.createBiquadFilter(), lpR = AC.createBiquadFilter();
+    lpL.type = lpR.type = 'lowpass'; lpL.frequency.value = lpR.frequency.value = 2400;
+    const fb = AC.createGain(); fb.gain.value = 0.38;
+    const merger = AC.createChannelMerger(2);
+    delayWet = AC.createGain();
+    delayIn.connect(dL); dL.connect(lpL); lpL.connect(merger, 0, 0);
+    lpL.connect(dR); dR.connect(lpR); lpR.connect(merger, 0, 1);
+    lpR.connect(fb); fb.connect(dL);
+    merger.connect(delayWet); delayWet.connect(master);
+
+    // room reverb from a generated impulse response
+    verbIn = AC.createGain();
+    const pre = AC.createDelay(0.2); pre.delayTime.value = 0.02;
+    const conv = AC.createConvolver(); conv.buffer = makeIR();
+    const vlp = AC.createBiquadFilter(); vlp.type = 'lowpass'; vlp.frequency.value = 5200;
+    verbWet = AC.createGain();
+    verbIn.connect(pre); pre.connect(conv); conv.connect(vlp); vlp.connect(verbWet); verbWet.connect(master);
+    applySpace();
+
+    const len = AC.sampleRate * 2;
+    noiseBuf = AC.createBuffer(1, len, AC.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+
+    tr.T0 = AC.currentTime + 0.06; tr.off = 0; tr.next = 0;
+    setInterval(scheduler, 25);
+  }
+
+  function applySpace(){
+    if (!AC) return;
+    const t = AC.currentTime;
+    delayWet.gain.setTargetAtTime(space * 0.55, t, 0.05);
+    verbWet.gain.setTargetAtTime(space * 1.1, t, 0.05);
+  }
+  function applyVolume(){
+    if (AC) master.gain.setTargetAtTime(muted ? 0 : vol, AC.currentTime, 0.05);
+  }
+
+  function panner(v){
+    if (AC.createStereoPanner){ const p = AC.createStereoPanner(); p.pan.value = v; return p; }
+    return AC.createGain();
+  }
+  // wire a voice to the master plus the echo and reverb sends
+  function bus(node, d, r){
+    node.connect(master);
+    const made = [];
+    if (d > 0){ const g = AC.createGain(); g.gain.value = d; node.connect(g); g.connect(delayIn); made.push(g); }
+    if (r > 0){ const g = AC.createGain(); g.gain.value = r; node.connect(g); g.connect(verbIn); made.push(g); }
+    return made;
+  }
+  function release(nodes){ nodes.forEach(n => { try { n.disconnect(); } catch(e){} }); }
+
+  function pluck({midi, vel, tilt = 0.3, pan = 0, dur = 0.9, at = 0}){
+    if (!AC || muted || voices >= VOICE_CAP) return;
+    const t = Math.max(AC.currentTime, at), f = mtof(midi), end = t + dur + 0.08;
+    const amp = AC.createGain();
+    amp.gain.setValueAtTime(0.0001, t);
+    amp.gain.linearRampToValueAtTime(Math.max(0.001, vel * 0.3), t + 0.006);
+    amp.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+    const filt = AC.createBiquadFilter(); filt.type = 'lowpass';
+    const cutoff = Math.min(12000, 500 + f * 2 + tilt * 4200 + vel * 1800);   // brighter up high, so high notes are not dull
+    filt.frequency.setValueAtTime(cutoff, t);
+    filt.frequency.exponentialRampToValueAtTime(Math.max(220, cutoff * 0.2), t + dur * 0.85);
+    filt.Q.value = 0.8 + tilt * 4;
+    const p = panner(pan);
+    filt.connect(amp); amp.connect(p);
+    const nodes = [filt, amp, p, ...bus(p, 0.42, 0.5)];
+    const oscs = [];
+    const add = (type, freq, cents, gain) => {
+      const o = AC.createOscillator(); o.type = type; o.frequency.value = freq; o.detune.value = cents;
+      const g = AC.createGain(); g.gain.value = gain;
+      o.connect(g); g.connect(filt); nodes.push(g);
+      o.start(t); o.stop(end); oscs.push(o);
+    };
+    if (tilt < 0.33){            // glassy: sine with a soft second and third partial
+      add('sine', f, 0, 1); add('sine', f * 2, 0, 0.3); add('sine', f * 3, 0, 0.08);
+    } else if (tilt < 0.66){     // warm: two slightly detuned triangles
+      add('triangle', f, -5, 0.65); add('triangle', f, 5, 0.65);
+    } else {                     // bright: detuned saws with a sub
+      add('sawtooth', f, -7, 0.5); add('sawtooth', f, 7, 0.5); add('sine', f / 2, 0, 0.3);
+    }
+    voices++;
+    oscs[0].onended = () => { voices--; release(nodes); };
+  }
+
+  function drum({midi, vel, pan = 0, at = 0, kind = 0}){
+    if (!AC || muted || voices >= VOICE_CAP) return;
+    const t = Math.max(AC.currentTime, at);
+    const p = panner(pan);
+    const nodes = [p, ...bus(p, 0.15, kind === 0 ? 0.08 : 0.24)];
+    let lastSrc = null, lastEnd = 0;
+    const track = (src, e) => { if (e >= lastEnd){ lastEnd = e; lastSrc = src; } };
+    const noise = (type, freq, q, len, level) => {
+      const n = AC.createBufferSource(); n.buffer = noiseBuf;
+      const fl = AC.createBiquadFilter(); fl.type = type; fl.frequency.value = freq; fl.Q.value = q;
+      const g = AC.createGain();
+      g.gain.setValueAtTime(level, t); g.gain.exponentialRampToValueAtTime(0.001, t + len);
+      n.connect(fl); fl.connect(g); g.connect(p);
+      n.start(t, Math.random() * 0.8); n.stop(t + len + 0.02);
+      nodes.push(fl, g); track(n, t + len);
+    };
+    const tone = (f0, f1, len, level, type) => {
+      const o = AC.createOscillator(); o.type = type || 'sine';
+      o.frequency.setValueAtTime(f0, t);
+      o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + len * 0.4);
+      const g = AC.createGain();
+      g.gain.setValueAtTime(level, t); g.gain.exponentialRampToValueAtTime(0.001, t + len);
+      o.connect(g); g.connect(p); o.start(t); o.stop(t + len + 0.02);
+      nodes.push(g); track(o, t + len);
+    };
+    if (kind === 0){             // kick, tuned to the key
+      const f = clamp(mtof(midi - 24), 42, 78);
+      tone(f * 3.2, f, 0.34, vel * 0.85);
+      noise('lowpass', 900, 0.7, 0.03, vel * 0.25);
+    } else if (kind === 1){      // snare / tom
+      const body = clamp(mtof(midi - 7), 120, 330);
+      tone(body * 1.6, body, 0.17, vel * 0.45, 'triangle');
+      noise('bandpass', 2400, 0.8, 0.17, vel * 0.4);
+    } else {                     // hat, open on hard hits
+      const open = vel > 0.82;
+      noise('highpass', 7500, 0.7, open ? 0.22 : 0.05, vel * 0.22);
+    }
+    voices++;
+    lastSrc.onended = () => { voices--; release(nodes); };
+  }
+
+  // continuous voice while the pen is drawing
+  let live = null;
+  function liveStart(){
+    if (!AC || muted || live) return;
+    const o1 = AC.createOscillator(), o2 = AC.createOscillator();
+    o1.type = 'sawtooth'; o2.type = 'sine';
+    const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 4; f.frequency.value = 800;
+    const g = AC.createGain(); g.gain.value = 0;
+    const p = panner(0);
+    o1.connect(f); o2.connect(f); f.connect(g); g.connect(p);
+    const nodes = [f, g, p, ...bus(p, 0.3, 0.4)];
+    o1.start(); o2.start();
+    live = {o1, o2, f, g, p, nodes};
+  }
+  function liveUpdate(midi, pressure, tilt, x){
+    if (!live) return;
+    const t = AC.currentTime, fr = mtof(midi);
+    live.o1.frequency.setTargetAtTime(fr, t, 0.03);
+    live.o2.frequency.setTargetAtTime(fr * 2, t, 0.03);
+    live.f.frequency.setTargetAtTime(350 + tilt * 4000 + pressure * 800, t, 0.05);
+    live.g.gain.setTargetAtTime(pressure * 0.16, t, 0.04);
+    if (live.p.pan) live.p.pan.setTargetAtTime((x / W) * 2 - 1, t, 0.05);
+  }
+  function liveStop(){
+    if (!live) return;
+    const l = live; live = null;
+    const t = AC.currentTime;
+    l.g.gain.setTargetAtTime(0, t, 0.06);
+    l.o1.stop(t + 0.4); l.o2.stop(t + 0.4);
+    l.o1.onended = () => release(l.nodes);
+  }
+
+  // sustained pad for closed loops
+  function droneStart(midi, vel, tilt, period){
+    if (!AC) return null;
+    const t = AC.currentTime, f = mtof(midi);
+    const filt = AC.createBiquadFilter(); filt.type = 'lowpass'; filt.Q.value = 2;
+    const fbase = 450 + tilt * 2200;
+    filt.frequency.value = fbase;
+    const breath = AC.createGain(); breath.gain.value = 1;
+    const amp = AC.createGain(); amp.gain.value = 0;
+    const p = panner(0);
+    const o1 = AC.createOscillator(), o2 = AC.createOscillator(), o3 = AC.createOscillator();
+    o1.type = 'sawtooth'; o2.type = 'sawtooth'; o3.type = 'sine';
+    o1.frequency.value = f; o2.frequency.value = f; o3.frequency.value = f * 1.5;
+    o1.detune.value = -8; o2.detune.value = 8;
+    const g3 = AC.createGain(); g3.gain.value = 0.6;
+    o1.connect(filt); o2.connect(filt); o3.connect(g3); g3.connect(filt);
+    filt.connect(breath); breath.connect(amp); amp.connect(p);
+    const made = bus(p, 0.3, 0.6);
+    const lfo = AC.createOscillator(); lfo.frequency.value = 1 / period;
+    const ld = AC.createGain(); ld.gain.value = 0.35;
+    const fd = AC.createGain(); fd.gain.value = 350;
+    lfo.connect(ld); ld.connect(breath.gain);
+    lfo.connect(fd); fd.connect(filt.frequency);
+    o1.start(); o2.start(); o3.start(); lfo.start();
+    const level = 0.04 + 0.06 * vel;
+    amp.gain.setTargetAtTime(level, t, 0.6);
+    return {o1, o2, o3, lfo, filt, amp, pan: p, level, fbase, midi,
+            nodes: [filt, breath, amp, p, g3, ld, fd, ...made]};
+  }
+  function droneUpdate(o, midi, pan){
+    const d = o.dr;
+    if (!d || !AC) return;
+    const t = AC.currentTime;
+    if (midi !== d.midi){
+      d.midi = midi;
+      const f = mtof(midi);
+      d.o1.frequency.setTargetAtTime(f, t, 0.25);
+      d.o2.frequency.setTargetAtTime(f, t, 0.25);
+      d.o3.frequency.setTargetAtTime(f * 1.5, t, 0.25);
+    }
+    d.amp.gain.setTargetAtTime(d.level * (0.6 + 0.4 * Math.min(1, o.energy)) * o.alpha, t, 0.08);
+    d.filt.frequency.setTargetAtTime(d.fbase + o.energy * 1200, t, 0.1);
+    if (d.pan.pan) d.pan.pan.setTargetAtTime(pan, t, 0.1);
+  }
+  function droneStop(d){
+    if (!d || !AC) return;
+    const t = AC.currentTime;
+    d.amp.gain.setTargetAtTime(0, t, 0.15);
+    [d.o1, d.o2, d.o3, d.lfo].forEach(o => { try { o.stop(t + 1.2); } catch(e){} });
+    d.o1.onended = () => release(d.nodes);
+  }
+
+  /* ---------- transport: notes are scheduled on the audio clock ---------- */
+  const tr = {T0: 0, off: 0, next: 0};
+  const LOOKAHEAD = 0.14;
+  function gridPos(){ return tr.off + (AC.currentTime - tr.T0) / STEP; }
+  function stepTime(g){ return tr.T0 + (g - tr.off) * STEP; }
+
+  function setBpm(v){
+    if (AC){ const g = gridPos(); tr.T0 = AC.currentTime; tr.off = g; }   // re-base so the loop position carries on smoothly
+    bpm = v; STEP = 60 / bpm / 4;
+    if (AC){
+      const t = AC.currentTime;
+      delayNodes.forEach(d => d.delayTime.setTargetAtTime(STEP * 3, t, 0.05));
+      orgs.forEach(o => { if (o.dr) o.dr.lfo.frequency.setTargetAtTime(1 / (o.steps * STEP), t, 0.1); });
+    }
+  }
+
+  function scheduler(){
+    if (!AC || AC.state !== 'running') return;
+    const g0 = gridPos();
+    if (tr.next < g0 - 1) tr.next = Math.ceil(g0);     // fell behind (throttled tab): skip ahead instead of machine-gunning
+    const horizon = AC.currentTime + LOOKAHEAD;
+    while (stepTime(tr.next) < horizon){
+      scheduleStep(tr.next, stepTime(tr.next));
+      tr.next++;
+    }
+  }
+
+  // visual events wait in a queue until the audio clock reaches them, so flashes land with the sound
+  const vq = [];
+  function later(at, fn){ if (vq.length > 300) vq.shift(); vq.push({at, fn}); }
+  function runVisuals(){
+    const now = AC.currentTime;
+    for (let i = 0; i < vq.length;){
+      if (vq[i].at <= now){ const e = vq.splice(i, 1)[0]; e.fn(); } else i++;
+    }
+  }
+
+  /* ---------- state ---------- */
+  const orgs = [];
+  const ripples = [];
+  const particles = [];
+  const links = [];
+  const hover = {on:false, x:0, y:0, repel:false};
+  let stroke = null, activeId = null;
+  let percMode = false;
+  let lastPenTime = 0;
+  const MAX_ORGS = 12;
+
+  const barrel = e => !!(e.buttons & 2) || !!(e.buttons & 32) || e.button === 2;
+  const tiltOf = e => Math.min(1, Math.hypot(e.tiltX || 0, e.tiltY || 0) / 65);
+  const pressureOf = e => e.pointerType === 'pen' ? Math.max(0.05, e.pressure || 0.05) : (e.pressure || 0.5);
+
+  /* ---------- hint text ---------- */
+  const hintEl = $('hint');
+  let hintTimer = null;
+  function showHint(text, ms = 6500){
+    hintEl.textContent = text;
+    hintEl.classList.add('show');
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(() => hintEl.classList.remove('show'), ms);
+  }
+  let spawnCount = 0;
+
+  /* ---------- drawing input ---------- */
+  function startStroke(e){
+    const perc = percMode || barrel(e);
+    hover.on = false;
+    stroke = {pts: [], t0: performance.now(), perc, dist: 0, tickX: e.clientX, tickY: e.clientY};
+    addPoint(e);
+    if (!perc) liveStart();
+  }
+
+  function addPoint(e){
+    if (!stroke) return;
+    const x = e.clientX, y = e.clientY;
+    const p = pressureOf(e), tl = tiltOf(e);
+    const last = stroke.pts[stroke.pts.length - 1];
+    if (last){
+      const d = Math.hypot(x - last.x, y - last.y);
+      if (d < 2) return;
+      stroke.dist += d;
+    }
+    stroke.pts.push({x, y, p, tl, t: performance.now() - stroke.t0});
+    const midi = noteFromY(y);
+    if (stroke.perc){
+      if (Math.hypot(x - stroke.tickX, y - stroke.tickY) > 46){
+        stroke.tickX = x; stroke.tickY = y;
+        drum({midi, vel: 0.3 + p * 0.7, pan: (x / W) * 2 - 1, kind: drumKind(y)});
+        ripples.push({x, y, r: 4, life: 1, hue: hueOf(y, true)});
+      }
+    } else {
+      liveUpdate(midi, p, tl, x);
+    }
+  }
+
+  function endStroke(){
+    liveStop();
+    const s = stroke; stroke = null; activeId = null;
+    if (!s || !s.pts.length) return;
+    if (s.pts.length < 4 || s.dist < 10){
+      const q = s.pts[0], midi = noteFromY(q.y), pan = (q.x / W) * 2 - 1;
+      if (s.perc) drum({midi, vel: 0.4 + q.p * 0.6, pan, kind: drumKind(q.y)});
+      else pluck({midi, vel: 0.3 + q.p * 0.7, tilt: q.tl, pan, dur: 1.4});
+      ripples.push({x: q.x, y: q.y, r: 6, life: 1, hue: hueOf(q.y, s.perc)});
+      burst(q.x, q.y, hueOf(q.y, s.perc), 6);
+      return;
+    }
+    spawn(s);
+  }
+
+  canvas.addEventListener('pointerdown', e => {
+    if (AC && AC.state === 'suspended') AC.resume();
+    if (e.pointerType === 'pen') lastPenTime = performance.now();
+    // palm rejection: ignore touch while a pen is near or drawing
+    if (e.pointerType === 'touch' && (stroke || performance.now() - lastPenTime < 1500)) return;
+    if (stroke) return;
+    e.preventDefault();
+    closePanel();
+    try { canvas.setPointerCapture(e.pointerId); } catch(err){}
+    activeId = e.pointerId;
+    startStroke(e);
+  });
+
+  canvas.addEventListener('pointermove', e => {
+    if (e.pointerType === 'pen') lastPenTime = performance.now();
+    if (stroke && e.pointerId === activeId){
+      const evs = (e.getCoalescedEvents && e.getCoalescedEvents()) || [];
+      (evs.length ? evs : [e]).forEach(addPoint);
+    } else if (e.pointerType !== 'touch'){
+      hover.on = true; hover.x = e.clientX; hover.y = e.clientY; hover.repel = barrel(e);
+    }
+  });
+
+  const up = e => { if (stroke && e.pointerId === activeId) endStroke(); };
+  canvas.addEventListener('pointerup', up);
+  canvas.addEventListener('pointercancel', up);
+  canvas.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') hover.on = false; });
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  /* ---------- organisms ---------- */
+  function resample(src, spacing){
+    const out = [{x: src[0].x, y: src[0].y, p: src[0].p, tl: src[0].tl}];
+    let a = src[0], need = spacing;
+    for (let i = 1; i < src.length; i++){
+      const b = src[i];
+      let dx = b.x - a.x, dy = b.y - a.y, seg = Math.hypot(dx, dy);
+      while (seg >= need){
+        const t = need / seg;
+        const np = {x: a.x + dx * t, y: a.y + dy * t, p: a.p + (b.p - a.p) * t, tl: a.tl + (b.tl - a.tl) * t};
+        out.push(np);
+        a = np; dx = b.x - a.x; dy = b.y - a.y; seg = Math.hypot(dx, dy); need = spacing;
+      }
+      need -= seg; a = b;
+    }
+    const l = src[src.length - 1];
+    out.push({x: l.x, y: l.y, p: l.p, tl: l.tl});
+    return out;
+  }
+
+  // evenly spread k hits over n steps; rot shifts the pattern so creatures do not all land on the downbeat
+  function euclid(k, n, rot){
+    const s = new Set();
+    for (let i = 0; i < k; i++) s.add((Math.floor(i * n / k) + rot) % n);
+    return s;
+  }
+
+  const CHORD_CV = 0.017;   // rad per px: curls tighter than ~58px radius play chords
+  const seen = {drone: false, curl: false};
+
+  function spawn(s){
+    const sp = Math.max(8, s.dist / 90);
+    const pts = resample(s.pts, sp);
+    const N = pts.length;
+    let cx = 0, cy = 0;
+    pts.forEach(p => { cx += p.x; cy += p.y; });
+    cx /= N; cy /= N;
+    pts.forEach(p => { p.lx = p.x - cx; p.ly = p.y - cy; });
+    for (let i = 0; i < N; i++){
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(N - 1, i + 1)];
+      const dx = b.lx - a.lx, dy = b.ly - a.ly;
+      const l = Math.hypot(dx, dy) || 1;
+      pts[i].nx = -dy / l; pts[i].ny = dx / l;
+    }
+
+    // shape analysis: turning angle at each point
+    const ang = new Float32Array(N);
+    let turn = 0;
+    for (let i = 1; i < N - 1; i++){
+      const ax = pts[i].lx - pts[i - 1].lx, ay = pts[i].ly - pts[i - 1].ly;
+      const bx = pts[i + 1].lx - pts[i].lx, by = pts[i + 1].ly - pts[i].ly;
+      const a = Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
+      ang[i] = a; turn += a;
+    }
+    let curls = 0;
+    for (let i = 0; i < N; i++){
+      let sum = 0, c = 0;
+      for (let j = Math.max(1, i - 2); j <= Math.min(N - 2, i + 2); j++){ sum += ang[j]; c++; }
+      pts[i].cv = c ? Math.abs(sum) / (c * sp) : 0;   // net turning cancels hand jitter
+      if (pts[i].cv > CHORD_CV) curls++;
+    }
+    const first = s.pts[0], lastP = s.pts[s.pts.length - 1];
+    const gap = Math.hypot(first.x - lastP.x, first.y - lastP.y);
+    const closed = !s.perc && s.dist > 130 && gap < Math.max(36, s.dist * 0.22) && Math.abs(turn) > 4.4;
+
+    // loop length: how long the stroke took, snapped to a musical length
+    const durSteps = (s.pts[s.pts.length - 1].t / 1000) / STEP;
+    let steps = LOOP_LENGTHS[0];
+    for (const L of LOOP_LENGTHS) if (Math.abs(L - durSteps) < Math.abs(steps - durSteps)) steps = L;
+    const k = Math.min(Math.max(2, Math.round(steps * 0.75)), Math.max(2, Math.round(s.dist / 55)));
+    const rot = Math.random() < 0.5 ? 0 : 2 * Math.floor(Math.random() * steps / 2);
+    const hits = closed ? new Set() : euclid(k, steps, rot);
+    // how many steps each hit has before the next one, so notes can ring as long as they have room
+    const gaps = {};
+    const hs = [...hits].sort((a, b) => a - b);
+    hs.forEach((h, i) => { gaps[h] = (i + 1 < hs.length ? hs[i + 1] : hs[0] + steps) - h; });
+
+    const o = {
+      pts, N, cx, cy,
+      vx: (Math.random() - 0.5) * 14, vy: (Math.random() - 0.5) * 14,
+      steps, hits, gaps,
+      perc: s.perc, drone: closed, curls, dr: null, echoCool: 0,
+      energy: closed ? 0.5 : 0.7, pulse: 0, alpha: 1, dying: false,
+      near: false, wakeCool: 0, phase: Math.random() * 6.28,
+      wx: new Float32Array(N), wy: new Float32Array(N)
+    };
+    for (let i = 0; i < N; i++){ o.wx[i] = cx + pts[i].lx; o.wy[i] = cy + pts[i].ly; }
+    if (closed){
+      let pm = 0, tm = 0;
+      pts.forEach(p => { pm += p.p; tm += p.tl; });
+      o.dr = droneStart(noteFromY(cy) - 12, pm / N, tm / N, steps * STEP);
+    }
+    orgs.push(o);
+
+    const alive = orgs.filter(x => !x.dying);
+    if (alive.length > MAX_ORGS) alive[0].dying = true;
+    const drones = orgs.filter(x => x.drone && !x.dying);
+    if (drones.length > 4) drones[0].dying = true;
+
+    spawnCount++;
+    if (o.drone && !seen.drone){ seen.drone = true; showHint('A closed loop becomes a drone. It breathes.', 7000); }
+    else if (curls >= 3 && !seen.curl){ seen.curl = true; showHint('Tight curls play chords.', 7000); }
+    else if (spawnCount === 1) showHint('It lives now. Hover your pen near it.');
+    else if (spawnCount === 3) showHint('Tilt the pen for a sharper tone. Hold the pen button for drums.', 8000);
+    else if (spawnCount === 5) showHint('Try Key and Scale up top, and the Mix panel for tempo and space.', 8000);
+  }
+
+  // called once per sixteenth note, ahead of time, with the exact audio-clock time
+  function scheduleStep(g, tg){
+    const acc = g % 16 === 0 ? 1 : g % 4 === 0 ? 0.92 : g % 2 === 0 ? 0.84 : 0.74;   // gentle metric accent
+    const sw = (g & 1) ? swing * STEP * 0.4 : 0;
+    for (const o of orgs){
+      if (o.dying || o.drone) continue;
+      const s = g % o.steps;
+      if (o.hits.has(s)) fire(o, s, tg + sw + (Math.random() - 0.5) * 0.006, acc);
+    }
+  }
+
+  function fire(o, s, at, acc){
+    const idx = Math.min(o.N - 1, Math.round(s / o.steps * (o.N - 1)));
+    const p = o.pts[idx], x = o.wx[idx], y = o.wy[idx];
+    const py = o.cy + p.ly;                     // pitch from the resting shape, so wobble does not flip notes
+    const deg = degFromY(py);
+    const vel = Math.min(1, (0.25 + 0.75 * p.p) * (0.4 + 0.6 * Math.min(1, o.energy))) * o.alpha * acc * (0.92 + Math.random() * 0.16);
+    const pan = clamp((x / W) * 2 - 1, -1, 1);
+    const hue = hueOf(y, o.perc);
+    const chord = !o.perc && p.cv > CHORD_CV;
+    const room = clamp((o.gaps[s] || 2) * STEP * 1.5, 0.3, 3);
+    const dur = room * (0.7 + 0.5 * (1 - p.tl));
+    if (o.perc){
+      drum({midi: noteFromDeg(deg), vel, pan, at, kind: drumKind(py)});
+    } else if (chord){
+      const strum = 0.03 + Math.min(0.05, p.cv * 1.5);
+      const order = (s % 2) ? [4, 2, 0] : [0, 2, 4];        // alternate strum direction
+      order.forEach((off, n) => {
+        pluck({midi: noteFromDeg(deg + off), vel: vel * 0.72, tilt: p.tl, pan, dur: dur + 0.4, at: at + n * strum});
+      });
+    } else {
+      pluck({midi: noteFromDeg(deg), vel, tilt: p.tl, pan, dur, at});
+    }
+    later(at, () => {
+      o.pulse = 1;
+      ripples.push({x, y, r: chord ? 20 : 6, life: 1, hue});
+      burst(x, y, hue, chord ? 4 : 2);
+    });
+    duet(o, x, y, deg, vel, at);
+  }
+
+  // when a note fires where another creature's body touches, that creature answers
+  function duet(src, x, y, deg, vel, at){
+    const R = 22, reply = at + STEP * 0.5;
+    for (const m of orgs){
+      if (m === src || m.dying || at < m.echoCool) continue;
+      let bj = -1, bd = R;
+      for (let j = 0; j < m.N; j++){
+        const d = Math.hypot(m.wx[j] - x, m.wy[j] - y);
+        if (d < bd){ bd = d; bj = j; }
+      }
+      if (bj < 0) continue;
+      m.echoCool = at + 0.15;
+      const mx = m.wx[bj], my = m.wy[bj], hue = hueOf(y, src.perc);
+      later(at, () => links.push({ax: x, ay: y, bx: mx, by: my, life: 1, hue}));
+      if (m.drone){ later(at, () => { m.energy = Math.min(1.6, m.energy + 0.5); }); continue; }
+      const mp = m.pts[bj];
+      const pan = clamp((mx / W) * 2 - 1, -1, 1);
+      const ev = vel * 0.65;
+      if (m.perc) drum({midi: noteFromDeg(deg), vel: ev, pan, at: reply, kind: drumKind(m.cy + mp.ly)});
+      else pluck({midi: noteFromDeg(deg + 2), vel: ev, tilt: mp.tl, pan, dur: 0.9, at: reply});
+      later(reply, () => {
+        m.pulse = Math.max(m.pulse, 0.8);
+        ripples.push({x: mx, y: my, r: 4, life: 1, hue: hueOf(my, m.perc)});
+      });
+    }
+  }
+
+  function wake(o, i){
+    const x = o.wx[i], y = o.wy[i];
+    const midi = noteFromY(y) + (o.perc ? 0 : 12);
+    const pan = clamp((x / W) * 2 - 1, -1, 1);
+    if (o.perc) drum({midi, vel: 0.7, pan, kind: drumKind(y)});
+    else pluck({midi, vel: 0.5, tilt: 0.15, pan, dur: 1.3});
+    o.pulse = 1;
+    ripples.push({x, y, r: 6, life: 1, hue: hueOf(y, o.perc)});
+    burst(x, y, hueOf(y, o.perc), 5);
+  }
+
+  function burst(x, y, hue, n){
+    for (let i = 0; i < n && particles.length < 300; i++){
+      particles.push({x, y, vx: (Math.random() - 0.5) * 50, vy: (Math.random() - 0.5) * 50 - 8, life: 1, hue});
+    }
+  }
+
+  function updateOrgs(dt, t){
+    const hoverOn = hover.on && !stroke;
+    const R = 120;
+    for (let k = orgs.length - 1; k >= 0; k--){
+      const o = orgs[k];
+      if (o.dying){
+        o.alpha -= dt / 1.2;
+        if (o.alpha <= 0){
+          if (o.drone){ droneStop(o.dr); o.dr = null; }
+          orgs.splice(k, 1); continue;
+        }
+      }
+      const e = Math.min(1.3, o.energy);
+      const calm = o.drone ? 0.45 : 1;
+      const amp = (2 + 9 * e) * calm, sp = 1.6 + 2.2 * e;
+      let minD = 1e9, nearI = 0;
+
+      for (let i = 0; i < o.N; i++){
+        const p = o.pts[i];
+        const taper = 0.2 + 0.8 * Math.sin(Math.PI * (i + 0.5) / o.N);
+        const w = Math.sin(t * sp - i * 0.5 + o.phase) * amp * taper;
+        let x = o.cx + p.lx + p.nx * w, y = o.cy + p.ly + p.ny * w;
+        if (hoverOn){
+          const dx = hover.x - x, dy = hover.y - y, d = Math.hypot(dx, dy);
+          if (d < minD){ minD = d; nearI = i; }
+          if (d < R){
+            const f = Math.pow(1 - d / R, 2) * (hover.repel ? -0.5 : 0.28);
+            x += dx * f; y += dy * f;
+          }
+        }
+        o.wx[i] = x; o.wy[i] = y;
+      }
+
+      // drift
+      o.vx += (Math.random() - 0.5) * 30 * dt;
+      o.vy += (Math.random() - 0.5) * 30 * dt;
+      if (hoverOn){
+        const dx = hover.x - o.cx, dy = hover.y - o.cy, d = Math.hypot(dx, dy);
+        if (d < 320 && d > 40){
+          const f = (1 - d / 320) * 90 * (hover.repel ? -2.4 : 1);
+          o.vx += dx / d * f * dt; o.vy += dy / d * f * dt;
+        }
+      }
+      const sp2 = Math.hypot(o.vx, o.vy), cap = 45;
+      if (sp2 > cap){ o.vx *= cap / sp2; o.vy *= cap / sp2; }
+      const damp = 1 - 0.4 * dt; o.vx *= damp; o.vy *= damp;
+      o.cx += o.vx * dt; o.cy += o.vy * dt;
+      if (o.cx < 30) o.vx = Math.abs(o.vx) + 4;
+      if (o.cx > W - 30) o.vx = -Math.abs(o.vx) - 4;
+      if (o.cy < 30) o.vy = Math.abs(o.vy) + 4;
+      if (o.cy > H - 30) o.vy = -Math.abs(o.vy) - 4;
+
+      // energy
+      const near = hoverOn && minD < 110;
+      if (near) o.energy = Math.min(1.6, o.energy + dt * 3.5);
+      else o.energy = Math.max(0.2, o.energy - dt * 0.3);
+      if (near && !o.near && !hover.repel && t > o.wakeCool){
+        o.wakeCool = t + 0.6;
+        if (!o.drone) wake(o, nearI);
+      }
+      o.near = near;
+      o.pulse = Math.max(0, o.pulse - dt * 3);
+
+      if (o.drone) droneUpdate(o, noteFromY(o.cy) - 12, clamp((o.cx / W) * 2 - 1, -1, 1));
+    }
+  }
+
+  /* ---------- rendering ---------- */
+  function drawGrid(curY){
+    const s = SCALES[scaleNames[scaleIdx]];
+    const n = s.length * OCT;
+    const hot = curY == null ? -1 : degFromY(curY);
+    ctx.lineWidth = 1;
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textBaseline = 'middle';
+    for (let d = 0; d < n; d++){
+      const y = H * (1 - (d + 0.5) / n);
+      const tonic = d % s.length === 0;
+      if (d === hot){
+        ctx.fillStyle = 'rgba(143,227,255,0.07)';
+        ctx.fillRect(0, H * (1 - (d + 1) / n), W, H / n);
+      }
+      ctx.strokeStyle = tonic ? 'rgba(160,150,255,0.11)' : 'rgba(160,150,255,0.035)';
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      const m = noteFromDeg(d);
+      ctx.fillStyle = d === hot ? 'rgba(143,227,255,0.85)' : tonic ? 'rgba(201,198,242,0.45)' : 'rgba(201,198,242,0.16)';
+      ctx.fillText(noteName(m) + (tonic ? Math.floor(m / 12) - 1 : ''), 10, y);
+    }
+  }
+
+  function drawOrg(o, t, gp){
+    const N = o.N, A = o.alpha;
+    const ph = (((gp % o.steps) + o.steps) % o.steps) / o.steps;
+    const head = ph * (N - 1);
+    const segs = o.drone ? N : N - 1;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+    if (o.drone){
+      const hh = hueOf(o.cy, false) | 0;
+      const breathe = 0.5 + 0.5 * Math.sin(6.2832 * gp / o.steps);
+      ctx.fillStyle = `hsla(${hh},80%,60%,${(0.04 + 0.06 * breathe) * A})`;
+      ctx.beginPath(); ctx.moveTo(o.wx[0], o.wy[0]);
+      for (let i = 1; i < N; i++) ctx.lineTo(o.wx[i], o.wy[i]);
+      ctx.closePath(); ctx.fill();
+    }
+
+    for (let pass = 0; pass < 2; pass++){
+      for (let i = 1; i <= segs; i++){
+        const j = i % N, q = i - 1;
+        const p = o.pts[j];
+        let bump;
+        if (o.drone) bump = 0.5 + 0.5 * Math.sin(6.2832 * (gp / o.steps - i / N));
+        else { const db = i - head; bump = Math.exp(-(db * db) / 18); }
+        const cvB = p.cv > CHORD_CV ? 1.5 : 1;
+        const w = (1.3 + p.p * 6.5) * (1 + p.tl * 0.8) * cvB * (1 + bump * (o.drone ? 0.5 : (0.7 + o.pulse * 0.6)));
+        const h = hueOf(o.wy[j], o.perc) | 0;
+        const l = 52 + bump * (o.drone ? 20 : 28);
+        if (o.perc){
+          if (i % 2) continue;
+          const r = w * (pass ? 0.65 : 2.2);
+          ctx.fillStyle = `hsla(${h},90%,${l + 8}%,${(pass ? 0.9 : 0.12) * A})`;
+          ctx.beginPath(); ctx.arc(o.wx[j], o.wy[j], r, 0, 6.2832); ctx.fill();
+        } else {
+          ctx.strokeStyle = `hsla(${h},90%,${l}%,${(pass ? 0.9 : 0.12) * A})`;
+          ctx.lineWidth = pass ? w : w * 3.2;
+          ctx.beginPath(); ctx.moveTo(o.wx[q], o.wy[q]); ctx.lineTo(o.wx[j], o.wy[j]); ctx.stroke();
+        }
+      }
+    }
+
+    // cilia
+    ctx.lineWidth = 1;
+    for (let i = 2; i < N - 1; i += 3){
+      const p = o.pts[i];
+      const len = (o.perc ? 8 : 3) + (o.perc ? 10 : 6) * Math.min(1.4, o.energy) * (0.5 + 0.5 * Math.sin(t * 3 + i));
+      const side = (i % 6 === 2) ? 1 : -1;
+      const h = hueOf(o.wy[i], o.perc) | 0;
+      ctx.strokeStyle = `hsla(${h},90%,70%,${0.45 * A})`;
+      ctx.beginPath();
+      ctx.moveTo(o.wx[i], o.wy[i]);
+      ctx.lineTo(o.wx[i] + p.nx * len * side, o.wy[i] + p.ny * len * side);
+      ctx.stroke();
+    }
+
+    // playhead (drones have none, the whole ring breathes)
+    if (o.drone) return;
+    const i0 = Math.min(N - 1, Math.floor(head)), i1 = Math.min(N - 1, i0 + 1), f = head - i0;
+    const hx = o.wx[i0] + (o.wx[i1] - o.wx[i0]) * f, hy = o.wy[i0] + (o.wy[i1] - o.wy[i0]) * f;
+    ctx.fillStyle = `rgba(255,255,255,${0.14 * A})`;
+    ctx.beginPath(); ctx.arc(hx, hy, 10 + o.pulse * 10, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = `rgba(255,255,255,${0.9 * A})`;
+    ctx.beginPath(); ctx.arc(hx, hy, 2.5 + o.pulse * 4, 0, 6.2832); ctx.fill();
+  }
+
+  function drawLinks(dt){
+    ctx.lineCap = 'round';
+    for (let i = links.length - 1; i >= 0; i--){
+      const l = links[i];
+      l.life -= dt * 2.4;
+      if (l.life <= 0){ links.splice(i, 1); continue; }
+      ctx.strokeStyle = `hsla(${l.hue | 0},90%,80%,${l.life * 0.8})`;
+      ctx.lineWidth = 1 + l.life * 2;
+      ctx.beginPath(); ctx.moveTo(l.ax, l.ay); ctx.lineTo(l.bx, l.by); ctx.stroke();
+      ctx.fillStyle = `hsla(${l.hue | 0},90%,85%,${l.life * 0.5})`;
+      ctx.beginPath(); ctx.arc(l.bx, l.by, 3 + (1 - l.life) * 10, 0, 6.2832); ctx.fill();
+    }
+  }
+
+  function drawStroke(){
+    if (!stroke || !stroke.pts.length) return;
+    const pts = stroke.pts;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (let pass = 0; pass < 2; pass++){
+      for (let i = 1; i < pts.length; i++){
+        const a = pts[i - 1], b = pts[i];
+        const w = (1.4 + b.p * 7) * (1 + b.tl * 0.9);
+        const h = hueOf(b.y, stroke.perc) | 0;
+        if (stroke.perc){
+          if (i % 3) continue;
+          ctx.fillStyle = `hsla(${h},90%,${pass ? 70 : 55}%,${pass ? 0.95 : 0.14})`;
+          ctx.beginPath(); ctx.arc(b.x, b.y, w * (pass ? 0.7 : 2.4), 0, 6.2832); ctx.fill();
+        } else {
+          ctx.strokeStyle = `hsla(${h},90%,${pass ? 66 : 55}%,${pass ? 0.95 : 0.14})`;
+          ctx.lineWidth = pass ? w : w * 3.2;
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        }
+      }
+    }
+    const l = pts[pts.length - 1];
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.beginPath(); ctx.arc(l.x, l.y, 2 + l.p * 3, 0, 6.2832); ctx.fill();
+    ctx.font = '13px system-ui, sans-serif'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = 'rgba(234,255,255,0.8)';
+    const label = stroke.perc ? ['kick', 'snare', 'hat'][drumKind(l.y)] : noteName(noteFromY(l.y));
+    ctx.fillText(label, l.x + 14, l.y - 12);
+  }
+
+  function drawRipples(dt){
+    ctx.lineWidth = 1.5;
+    for (let i = ripples.length - 1; i >= 0; i--){
+      const r = ripples[i];
+      r.r += dt * 90; r.life -= dt * 1.1;
+      if (r.life <= 0){ ripples.splice(i, 1); continue; }
+      ctx.strokeStyle = `hsla(${r.hue | 0},90%,72%,${r.life * 0.5})`;
+      ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, 6.2832); ctx.stroke();
+    }
+  }
+
+  function drawParticles(dt){
+    for (let i = particles.length - 1; i >= 0; i--){
+      const p = particles[i];
+      p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 1 - dt; p.vy *= 1 - dt;
+      p.life -= dt * 0.8;
+      if (p.life <= 0){ particles.splice(i, 1); continue; }
+      ctx.fillStyle = `hsla(${p.hue | 0},90%,75%,${p.life * 0.8})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 0.6 + 1.6 * p.life, 0, 6.2832); ctx.fill();
+    }
+  }
+
+  function drawHover(t){
+    if (!hover.on || stroke) return;
+    const hue = hover.repel ? 8 : 190;
+    const g = ctx.createRadialGradient(hover.x, hover.y, 0, hover.x, hover.y, 120);
+    g.addColorStop(0, `hsla(${hue},90%,70%,0.16)`);
+    g.addColorStop(1, `hsla(${hue},90%,70%,0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(hover.x, hover.y, 120, 0, 6.2832); ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = `hsla(${hue},90%,75%,0.7)`;
+    ctx.beginPath(); ctx.arc(hover.x, hover.y, 12 + Math.sin(t * 4) * 2, 0, 6.2832); ctx.stroke();
+    ctx.font = '13px system-ui, sans-serif'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = 'rgba(234,255,255,0.7)';
+    ctx.fillText(noteName(noteFromY(hover.y)), hover.x + 20, hover.y - 16);
+  }
+
+  let last = performance.now();
+  function frame(now){
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    const t = now / 1000;
+    if (AC) runVisuals();
+    const gp = AC ? gridPos() : t / STEP;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.clearRect(0, 0, W, H);
+    const curY = stroke && stroke.pts.length ? stroke.pts[stroke.pts.length - 1].y : (hover.on ? hover.y : null);
+    drawGrid(curY);
+    ctx.globalCompositeOperation = 'lighter';
+    updateOrgs(dt, t);
+    for (const o of orgs) drawOrg(o, t, gp);
+    drawStroke();
+    drawRipples(dt);
+    drawLinks(dt);
+    drawParticles(dt);
+    drawHover(t);
+    ctx.globalCompositeOperation = 'source-over';
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------- UI ---------- */
+  const scaleBtn = $('scaleBtn'), keyBtn = $('keyBtn'), percBtn = $('percBtn'), undoBtn = $('undoBtn');
+  const muteBtn = $('muteBtn'), clearBtn = $('clearBtn'), mixBtn = $('mixBtn'), recBtn = $('recBtn');
+  const panel = $('panel'), bar = $('bar');
+  const sliders = {
+    bpm:   {el: $('bpm'),   out: $('bpmOut'),   fmt: v => v + ' BPM'},
+    swing: {el: $('swing'), out: $('swingOut'), fmt: v => v + '%'},
+    space: {el: $('space'), out: $('spaceOut'), fmt: v => v + '%'},
+    vol:   {el: $('vol'),   out: $('volOut'),   fmt: v => v + '%'}
+  };
+
+  function placePanel(){
+    if (!bar || !panel) return;
+    panel.style.top = (bar.getBoundingClientRect().bottom + 8) + 'px';
+  }
+  function openPanel(){ placePanel(); panel.classList.add('open'); mixBtn.setAttribute('aria-expanded', 'true'); mixBtn.classList.add('on'); }
+  function closePanel(){ panel.classList.remove('open'); mixBtn.setAttribute('aria-expanded', 'false'); mixBtn.classList.remove('on'); }
+  mixBtn.addEventListener('click', () => panel.classList.contains('open') ? closePanel() : openPanel());
+
+  function syncSlider(name, value){
+    const s = sliders[name];
+    s.el.value = value; s.out.textContent = s.fmt(value);
+  }
+  syncSlider('bpm', bpm);
+  syncSlider('swing', Math.round(swing * 100));
+  syncSlider('space', Math.round(space * 100));
+  syncSlider('vol', Math.round(vol * 100));
+  sliders.bpm.el.addEventListener('input', () => {
+    const v = +sliders.bpm.el.value; sliders.bpm.out.textContent = sliders.bpm.fmt(v);
+    setBpm(v); savePrefs();
+  });
+  sliders.swing.el.addEventListener('input', () => {
+    const v = +sliders.swing.el.value; sliders.swing.out.textContent = sliders.swing.fmt(v);
+    swing = v / 100; savePrefs();
+  });
+  sliders.space.el.addEventListener('input', () => {
+    const v = +sliders.space.el.value; sliders.space.out.textContent = sliders.space.fmt(v);
+    space = v / 100; applySpace(); savePrefs();
+  });
+  sliders.vol.el.addEventListener('input', () => {
+    const v = +sliders.vol.el.value; sliders.vol.out.textContent = sliders.vol.fmt(v);
+    vol = v / 100; applyVolume(); savePrefs();
+  });
+
+  scaleBtn.textContent = scaleNames[scaleIdx];
+  keyBtn.textContent = 'Key ' + KEYS[keyIdx][0];
+  scaleBtn.addEventListener('click', () => {
+    scaleIdx = (scaleIdx + 1) % scaleNames.length;
+    scaleBtn.textContent = scaleNames[scaleIdx]; savePrefs();
+  });
+  keyBtn.addEventListener('click', () => {
+    keyIdx = (keyIdx + 1) % KEYS.length; applyKey();
+    keyBtn.textContent = 'Key ' + KEYS[keyIdx][0]; savePrefs();
+  });
+  percBtn.addEventListener('click', () => {
+    percMode = !percMode;
+    percBtn.classList.toggle('on', percMode);
+    percBtn.setAttribute('aria-pressed', percMode);
+  });
+  undoBtn.addEventListener('click', () => {
+    for (let i = orgs.length - 1; i >= 0; i--) if (!orgs[i].dying){ orgs[i].dying = true; break; }
+  });
+  muteBtn.addEventListener('click', () => {
+    muted = !muted;
+    muteBtn.textContent = muted ? 'Sound off' : 'Sound on';
+    muteBtn.classList.toggle('off', muted);
+    if (muted) liveStop();
+    applyVolume();
+  });
+  clearBtn.addEventListener('click', () => { orgs.forEach(o => o.dying = true); });
+
+  // record the mix to an audio file
+  let rec = null, recChunks = [];
+  if (!window.MediaRecorder) recBtn.style.display = 'none';
+  recBtn.addEventListener('click', () => {
+    if (!recDest) return;
+    if (rec){ rec.stop(); return; }
+    const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+    const mime = types.find(m => MediaRecorder.isTypeSupported(m)) || '';
+    let r;
+    try { r = new MediaRecorder(recDest.stream, mime ? {mimeType: mime} : undefined); }
+    catch(e){ showHint('Recording is not supported here.', 4000); return; }
+    rec = r; recChunks = [];
+    r.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
+    r.onstop = () => {
+      const type = r.mimeType || mime || 'audio/webm';
+      const ext = type.includes('ogg') ? 'ogg' : type.includes('mp4') ? 'm4a' : 'webm';
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob(recChunks, {type}));
+      a.download = 'inkling-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.' + ext;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      rec = null; recBtn.textContent = 'Record'; recBtn.classList.remove('rec');
+    };
+    r.start();
+    recBtn.textContent = 'Stop and save'; recBtn.classList.add('rec');
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && AC && AC.state === 'suspended') AC.resume();
+  });
+
+  $('begin').addEventListener('click', () => {
+    initAudio();
+    if (AC.state === 'suspended') AC.resume();
+    $('overlay').style.display = 'none';
+    showHint('Draw a line and listen to it.');
+  });
+
+  /* ---------- install as an app ---------- */
+  const installBtn = $('installBtn');
+  let installEvt = null;
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault(); installEvt = e; installBtn.hidden = false; placePanel();
+  });
+  installBtn.addEventListener('click', async () => {
+    if (!installEvt) return;
+    const ev = installEvt; installEvt = null; installBtn.hidden = true;
+    try { ev.prompt(); await ev.userChoice; } catch(err){}
+    placePanel();
+  });
+  window.addEventListener('appinstalled', () => { installEvt = null; installBtn.hidden = true; showHint('Installed. Find Inkling with your other apps.', 5000); });
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
+    window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+  }
+
+  resize();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
