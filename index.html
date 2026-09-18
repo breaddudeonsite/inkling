@@ -198,6 +198,22 @@
   function applyKey(){ const r = KEYS[keyIdx][1]; baseMidi = 48 + (r > 6 ? r - 12 : r); }
   applyKey();
 
+  // slow harmonic drift: every 45-90s of active life, the whole piece steps one place
+  // around the circle of fifths, so a long-running drawing modulates instead of looping forever in one key
+  let keyDriftTimer = null;
+  function scheduleKeyDrift(){
+    const delay = 45000 + Math.random() * 45000;
+    keyDriftTimer = setTimeout(() => {
+      if (!stroke && orgs.some(o => !o.dying)){
+        keyIdx = (keyIdx + (Math.random() < 0.5 ? 1 : -1) + KEYS.length) % KEYS.length;
+        applyKey();
+        keyBtn.textContent = 'Key ' + KEYS[keyIdx][0];
+        savePrefs();
+      }
+      scheduleKeyDrift();
+    }, delay);
+  }
+
   /* ---------- tempo grid ---------- */
   let bpm = pick(saved.bpm, 40, 140, 72) | 0;
   let STEP = 60 / bpm / 4;       // seconds per sixteenth note
@@ -293,6 +309,17 @@
     verbIn.connect(pre); pre.connect(conv); conv.connect(vlp); vlp.connect(verbWet); verbWet.connect(master);
     applySpace();
 
+    // three independently-rated slow LFOs breathe the echo and reverb tone open and shut —
+    // never repeating in lockstep, which is what reads as a swirl rather than a wobble
+    const swirl = (target, hz, depth) => {
+      const o = AC.createOscillator(); o.type = 'sine'; o.frequency.value = hz;
+      const g = AC.createGain(); g.gain.value = depth;
+      o.connect(g); g.connect(target); o.start();
+    };
+    swirl(lpL.frequency, 0.037, 1300);
+    swirl(lpR.frequency, 0.029, 1200);
+    swirl(vlp.frequency, 0.021, 1800);
+
     const len = AC.sampleRate * 2;
     noiseBuf = AC.createBuffer(1, len, AC.sampleRate);
     const d = noiseBuf.getChannelData(0);
@@ -300,6 +327,7 @@
 
     tr.T0 = AC.currentTime + 0.06; tr.off = 0; tr.next = 0;
     setInterval(scheduler, 25);
+    scheduleKeyDrift();
   }
 
   function applySpace(){
@@ -707,7 +735,36 @@
 
   const CHORD_CV = 0.017;   // rad per px: curls tighter than ~58px radius play chords
   const CORNER_ANGLE = 1.05; // rad: a single sharp bend, distinct from a sustained curl
-  const seen = {drone: false, curl: false, bass: false, arp: false, sweep: false, cluster: false};
+  const seen = {drone: false, curl: false, bass: false, arp: false, sweep: false, cluster: false, evolve: false};
+
+  // ---------- shared harmony: everything drawn breathes the same chord progression ----------
+  // roots are scale-degree steps (mod the current scale's length), stacked in skip-a-step
+  // thirds the same way clusters and strums already build chords, so it reads as one language.
+  // the progression itself loops slowly (I-IV-V-vi-ish motion, generalized to any scale) and
+  // resets whenever the scale or key changes so it never clashes with a fresh palette.
+  const CHORD_LEN = 64;             // steps per chord = 4 bars at 16 steps/bar
+  const PROGRESSION = [0, 3, 4, 1];
+  function chordRootAt(g){
+    const len = SCALES[scaleNames[scaleIdx]].length;
+    return PROGRESSION[Math.floor(g / CHORD_LEN) % PROGRESSION.length] % len;
+  }
+  function chordTonesAt(g){
+    const len = SCALES[scaleNames[scaleIdx]].length, root = chordRootAt(g);
+    return new Set([root % len, (root + 2) % len, (root + 4) % len]);
+  }
+  // pull a degree toward the current chord: strong beats snap fully, weak beats mostly hold but
+  // sometimes let a passing tone through, which is what keeps it feeling drawn rather than quantized
+  function gravitate(deg, g, acc){
+    const len = SCALES[scaleNames[scaleIdx]].length;
+    const tones = chordTonesAt(g);
+    const cls = ((deg % len) + len) % len;
+    if (tones.has(cls)) return deg;
+    const pull = acc > 0.9 ? 1 : acc > 0.8 ? 0.6 : 0.22;
+    if (Math.random() > pull) return deg;
+    let best = cls, bestDist = len;
+    tones.forEach(ct => { const d = Math.min(Math.abs(ct - cls), len - Math.abs(ct - cls)); if (d < bestDist){ bestDist = d; best = ct; } });
+    return deg - cls + best;
+  }
 
   function spawn(s){
     const sp = Math.max(8, s.dist / 90);
@@ -790,6 +847,7 @@
       energy: closed ? 0.5 : clamp(0.5 * speedFactor, 0.35, 1.2), pulse: 0, alpha: 1, dying: false,
       near: false, wakeCool: 0, phase: Math.random() * 6.28,
       clusterSize: 1, clusterDeg: null,
+      pitchOffsets: {}, lastCycle: AC ? Math.floor(gridPos() / steps) : 0,
       wx: new Float32Array(N), wy: new Float32Array(N)
     };
     for (let i = 0; i < N; i++){ o.wx[i] = cx + pts[i].lx; o.wy[i] = cy + pts[i].ly; }
@@ -816,23 +874,63 @@
     else if (spawnCount === 5) showHint('Try Key and Scale up top, and the Mix panel for tempo and space.', 8000);
   }
 
+  // recompute how long each hit has to ring after the hit set itself has changed
+  function regapOrg(o){
+    const hs = [...o.hits].sort((a, b) => a - b);
+    const gaps = {};
+    hs.forEach((h, i) => { gaps[h] = (i + 1 < hs.length ? hs[i + 1] : hs[0] + o.steps) - h; });
+    o.gaps = gaps;
+  }
+
+  // a creature's pattern is not fixed at birth: each time it completes a full loop it may
+  // grow a new hit next to one it already has, let an old one rest, or nudge one note's pitch
+  // by a scale step — small, bounded mutations so the shape keeps its character but drifts over its life
+  function evolve(o){
+    if (o.perc || o.drone) return;
+    if (Math.random() < 0.35){
+      const active = [...o.hits];
+      if (Math.random() < 0.5 && active.length < o.steps - 1){
+        const anchor = active[Math.floor(Math.random() * active.length)];
+        const cand = (anchor + (Math.random() < 0.5 ? 1 : -1) + o.steps) % o.steps;
+        if (!o.hits.has(cand)){ o.hits.add(cand); regapOrg(o); }
+      } else if (active.length > 2){
+        const drop = active[Math.floor(Math.random() * active.length)];
+        o.hits.delete(drop); delete o.pitchOffsets[drop]; regapOrg(o);
+      }
+      if (!seen.evolve){ seen.evolve = true; showHint('Leave one alive a while — it grows and changes its tune.', 7000); }
+    }
+    if (o.hits.size && Math.random() < 0.5){
+      const arr = [...o.hits];
+      const h = arr[Math.floor(Math.random() * arr.length)];
+      const cur = o.pitchOffsets[h] || 0;
+      o.pitchOffsets[h] = clamp(cur + (Math.random() < 0.5 ? 1 : -1), -3, 3);
+    }
+    if (Math.random() < 0.08){
+      o.octaveShift = clamp((o.octaveShift || 0) + (Math.random() < 0.5 ? 1 : -1), -2, 2);
+    }
+    o.phaseDrift = clamp((o.phaseDrift || 0) + (Math.random() - 0.5) * STEP * 0.2, -STEP * 1.5, STEP * 1.5);
+  }
+
   // called once per sixteenth note, ahead of time, with the exact audio-clock time
   function scheduleStep(g, tg){
     const acc = g % 16 === 0 ? 1 : g % 4 === 0 ? 0.92 : g % 2 === 0 ? 0.84 : 0.74;   // gentle metric accent
     const sw = (g & 1) ? swing * STEP * 0.4 : 0;
     for (const o of orgs){
       if (o.dying || o.drone) continue;
+      const cycle = Math.floor(g / o.steps);
+      if (cycle !== o.lastCycle){ o.lastCycle = cycle; evolve(o); }
       const s = g % o.steps;
-      if (o.hits.has(s)) fire(o, s, tg + sw + (Math.random() - 0.5) * 0.006, acc);
+      if (o.hits.has(s)) fire(o, s, tg + sw + (o.phaseDrift || 0) + (Math.random() - 0.5) * 0.006, acc, g);
     }
   }
 
-  function fire(o, s, at, acc){
+  function fire(o, s, at, acc, g){
     const idx = Math.min(o.N - 1, Math.round(s / o.steps * (o.N - 1)));
     const p = o.pts[idx], x = o.wx[idx], y = o.wy[idx];
     const py = o.cy + p.ly;                     // pitch from the resting shape, so wobble does not flip notes
     // clustered creatures (3+, huddled close) lock onto a shared chord instead of reading their own shape's height
-    const deg = (o.clusterSize >= 3 && o.clusterDeg != null) ? o.clusterDeg : degFromY(py);
+    let deg = (o.clusterSize >= 3 && o.clusterDeg != null) ? o.clusterDeg : degFromY(py) + (o.pitchOffsets[s] || 0);
+    deg = gravitate(deg, g, acc);
     const oct = (o.octaveShift || 0) * 12;
     const vel = Math.min(1, (0.25 + 0.75 * p.p) * (0.4 + 0.6 * Math.min(1, o.energy))) * o.alpha * acc * (0.92 + Math.random() * 0.16);
     const pan = clamp((x / W) * 2 - 1, -1, 1);
